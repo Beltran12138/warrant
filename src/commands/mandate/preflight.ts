@@ -16,6 +16,8 @@ import {
   scoreSwap,
 } from "../../lib/score.js";
 import { loadMandate } from "../../lib/spec.js";
+import { quoteHash, readOnchainMandate, scorecardHash, VERDICT_INDEX } from "../../lib/onchain.js";
+import type { Address } from "viem";
 
 const inputs = {
   quoteId: {
@@ -33,12 +35,54 @@ const inputs = {
     required: false,
     prompt: false,
   },
+  registry: {
+    type: InputFieldType.Text,
+    flag: "registry",
+    message: "MandateRegistry contract address — read the mandate on-chain instead of from mandate.json",
+    required: false,
+    prompt: false,
+  },
+  principal: {
+    type: InputFieldType.Text,
+    flag: "principal",
+    message: "Address of the principal who granted the on-chain mandate (with --registry)",
+    required: false,
+    prompt: false,
+  },
+  agent: {
+    type: InputFieldType.Text,
+    flag: "agent",
+    message: "Agent address the mandate was granted to (default: the quote's wallet address)",
+    required: false,
+    prompt: false,
+  },
+  rpcUrl: {
+    type: InputFieldType.Text,
+    flag: "rpc-url",
+    message: "RPC endpoint of the chain the MandateRegistry lives on (with --registry)",
+    required: false,
+    prompt: false,
+  },
 } satisfies InputSchema;
+
+/** Everything the agent needs to call MandateRegistry.attestPreflight for this scorecard. */
+type Attestation = {
+  rpcUrl: string;
+  registry: string;
+  principal: string;
+  agent: string;
+  mandateVersion: number;
+  quoteHash: string;
+  verdict: number;
+  scorecardHash: string;
+};
 
 type PreflightResult = {
   scorecard: Scorecard | null;
   mandate: MandateSpec;
   mandateSource: string;
+  /** 链上 mandate 时附带：agent 可据此调用 attestPreflight。 */
+  attestation?: Attestation;
   /** 无待检报价等软状态的说明。 */
   message?: string;
 };
@@ -76,7 +120,7 @@ export default class MandatePreflight extends PluginCommand<PreflightResult> {
   protected readonly pluginCommandId = "mandate:preflight";
 
   async execute(io: CommandIO): Promise<PreflightResult> {
-    const { quoteId, mandateFile } = await io.resolveInputs(inputs);
+    const { quoteId, mandateFile, registry, principal, agent, rpcUrl } = await io.resolveInputs(inputs);
     const { spec, source } = loadMandate(process.cwd(), mandateFile || "mandate.json");
 
     const store = this.ctx.swapQuoteStore;
@@ -110,8 +154,65 @@ export default class MandatePreflight extends PluginCommand<PreflightResult> {
     }
 
     const swap = this.normalize(targetId, loaded);
-    const scorecard = scoreSwap(swap, spec);
-    return { scorecard, mandate: spec, mandateSource: source };
+
+    if (!registry?.trim()) {
+      const scorecard = scoreSwap(swap, spec);
+      return { scorecard, mandate: spec, mandateSource: source };
+    }
+
+    // 链上 mandate：principal 在 MandateRegistry 里授予该 agent 的边界。
+    const agentAddr = (agent?.trim() || swap.walletAddress) as Address | undefined;
+    if (!principal?.trim() || !rpcUrl?.trim() || !agentAddr) {
+      return {
+        scorecard: null,
+        mandate: spec,
+        mandateSource: source,
+        message: "--registry 需同时提供 --principal 与 --rpc-url（agent 默认取报价钱包地址，缺失时用 --agent 指定）。",
+      };
+    }
+    let onchain: Awaited<ReturnType<typeof readOnchainMandate>>;
+    try {
+      onchain = await readOnchainMandate({
+        rpcUrl: rpcUrl.trim(),
+        registry: registry.trim() as Address,
+        principal: principal.trim() as Address,
+        agent: agentAddr,
+      });
+    } catch (e) {
+      return {
+        scorecard: null,
+        mandate: spec,
+        mandateSource: source,
+        message: `读取链上 mandate 失败：${(e as Error).message}`,
+      };
+    }
+
+    const scorecard = scoreSwap(swap, onchain.spec);
+    if (!onchain.active) {
+      scorecard.verdict = "fail";
+      scorecard.notes.unshift(
+        onchain.version === 0
+          ? "链上没有该 principal 授予此 agent 的 mandate：agent 未获授权。"
+          : `链上 mandate v${onchain.version} 已撤销或过期：agent 当前未获授权。`,
+      );
+    }
+    return {
+      scorecard,
+      mandate: onchain.spec,
+      mandateSource: `${onchain.source} v${onchain.version}${onchain.active ? "" : " (inactive)"}`,
+      attestation: onchain.active
+        ? {
+            rpcUrl: rpcUrl.trim(),
+            registry: registry.trim(),
+            principal: principal.trim(),
+            agent: agentAddr,
+            mandateVersion: onchain.version,
+            quoteHash: quoteHash(targetId),
+            verdict: VERDICT_INDEX[scorecard.verdict],
+            scorecardHash: scorecardHash(scorecard),
+          }
+        : undefined,
+    };
   }
 
   /** 按 createdAt 取最近；无 createdAt 时取数组最后一个。 */
@@ -200,6 +301,9 @@ export default class MandatePreflight extends PluginCommand<PreflightResult> {
 
   override successHint(data: PreflightResult): string {
     if (!data.scorecard) return data.message ?? "无结果。";
-    return renderScorecard(data.scorecard, data.mandateSource);
+    const out = renderScorecard(data.scorecard, data.mandateSource);
+    const a = data.attestation;
+    if (!a) return out;
+    return `${out}\n\nAttest on-chain that this scorecard was shown before execution:\n  cast send ${a.registry} "attestPreflight(address,bytes32,uint32,uint8,bytes32)" ${a.principal} ${a.quoteHash} ${a.mandateVersion} ${a.verdict} ${a.scorecardHash} --rpc-url ${a.rpcUrl} --private-key $AGENT_PRIVATE_KEY   # signer must be agent ${a.agent}`;
   }
 }

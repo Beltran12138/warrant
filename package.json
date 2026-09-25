@@ -19,7 +19,7 @@
     "build": "tsc -p tsconfig.json && oclif manifest",
     "prepack": "tsc -p tsconfig.json && oclif manifest",
     "relink": "node relink.cjs",
-    "test": "npm run build && node test/score.test.mjs",
+    "test": "npm run build && node test/score.test.mjs && node test/onchain.test.mjs",
     "demo": "npm run build && node test/demo.mjs"
   },
   "oclif": {
@@ -75,6 +75,9 @@
   },
   "peerDependencies": {
     "@metamask/agent-wallet": "^6.2.0"
+  },
+  "dependencies": {
+    "viem": "^2.56.5"
   },
   "devDependencies": {
     "@metamask/agent-sdk": "^6.2.0",
