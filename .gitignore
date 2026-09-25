@@ -16,3 +16,4 @@ bun.lockb
 !.env.example
 contracts/out/
 contracts/cache/
+contracts/lib/
