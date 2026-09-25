@@ -1,0 +1,9 @@
+{
+  "maxUsdPerTrade": 1000,
+  "maxSlippageBps": 100,
+  "maxPriceImpactBps": 150,
+  "maxFeeBps": 50,
+  "allowCrossChain": true,
+  "allowNewApproval": true,
+  "recipientMustBeSelf": true
+}

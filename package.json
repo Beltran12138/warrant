@@ -1,0 +1,85 @@
+{
+  "name": "mm-plugin-mandate",
+  "version": "0.1.0",
+  "description": "Mandate — preflight trade-suitability reveal for MetaMask Agent Wallet",
+  "license": "MIT",
+  "type": "module",
+  "keywords": [
+    "oclif-plugin",
+    "metamask",
+    "agent-wallet",
+    "mandate",
+    "preflight"
+  ],
+  "files": [
+    "dist",
+    "oclif.manifest.json"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json && oclif manifest",
+    "prepack": "tsc -p tsconfig.json && oclif manifest",
+    "relink": "node relink.cjs",
+    "test": "npm run build && node test/score.test.mjs",
+    "demo": "npm run build && node test/demo.mjs"
+  },
+  "oclif": {
+    "bin": "mm",
+    "commands": "./dist/commands",
+    "topicSeparator": " ",
+    "topics": {
+      "mandate": {
+        "description": "Preflight trade-suitability reveal before an agent trades"
+      },
+      "hello": {
+        "description": "Smoke-test command from the plugin template"
+      }
+    }
+  },
+  "mm": {
+    "schemaVersion": 1,
+    "minCliVersion": "^6.2.0",
+    "capabilities": [],
+    "commands": [
+      {
+        "id": "mandate:preflight",
+        "capabilities": [
+          "wallet-read"
+        ],
+        "dataAccess": [
+          "swap-quotes",
+          "prices",
+          "fees",
+          "accounts"
+        ]
+      },
+      {
+        "id": "mandate:introspect",
+        "capabilities": [
+          "wallet-read"
+        ],
+        "dataAccess": [
+          "accounts",
+          "balances",
+          "prices",
+          "tokens",
+          "fees",
+          "network"
+        ]
+      },
+      {
+        "id": "hello:ping",
+        "capabilities": [],
+        "dataAccess": []
+      }
+    ]
+  },
+  "peerDependencies": {
+    "@metamask/agent-wallet": "^6.2.0"
+  },
+  "devDependencies": {
+    "@metamask/agent-sdk": "^6.2.0",
+    "@metamask/agent-wallet": "^6.2.0",
+    "oclif": "^4",
+    "typescript": "^5"
+  }
+}
