@@ -87,9 +87,9 @@ type PreflightResult = {
   scorecard: Scorecard | null;
   mandate: MandateSpec;
   mandateSource: string;
-  /** 链上 mandate 时附带：agent 可据此调用 attestPreflight。 */
+  /** Present when the mandate is on-chain: what the agent needs to call attestPreflight. */
   attestation?: Attestation;
-  /** 无待检报价等软状态的说明。 */
+  /** Explanation for soft states such as "no pending quote". */
   message?: string;
 };
 
@@ -99,7 +99,7 @@ const toNum = (v: unknown): number | undefined => {
   return Number.isFinite(n) ? n : undefined;
 };
 
-/** priceImpact 约定为比率(fraction)；>1 视为百分数兜底。附原值供人核。 */
+/** priceImpact is expected as a fraction; values > 1 are treated as a percentage. */
 const normImpact = (v: unknown): number | undefined => {
   const n = toNum(v);
   return n === undefined ? undefined : normalizeImpact(n);
@@ -115,7 +115,7 @@ export default class MandatePreflight extends PluginCommand<PreflightResult> {
     "<%= config.bin %> mandate preflight --mandate-file ./mandate.json --json",
   ];
 
-  // 只读揭示：需要已登录会话以访问 stored quote，但不初始化钱包提交路径。
+  // Read-only reveal: needs a logged-in session to read stored quotes, never initialises the submit path.
   static override requiresAuth = true;
   static override requiresInit = false;
 
@@ -131,7 +131,7 @@ export default class MandatePreflight extends PluginCommand<PreflightResult> {
 
     const store = this.ctx.swapQuoteStore;
 
-    // 选定要检的报价：显式 id，否则取最近一条 pending。
+    // Pick the quote to check: explicit id, otherwise the most recent pending one.
     let targetId = quoteId?.trim();
     if (!targetId) {
       const ids = store.listQuoteIds?.() ?? [];
@@ -141,7 +141,7 @@ export default class MandatePreflight extends PluginCommand<PreflightResult> {
           mandate: spec,
           mandateSource: source,
           message:
-            "没有待检的 swap 报价。先运行 `mm swap quote ...` 生成报价，再 `mm mandate preflight` 揭示其风险。",
+            "No pending swap quote. Run `mm swap quote ...` first, then `mm mandate preflight` to reveal its risk.",
         };
       }
       targetId = this.pickLatest(store, ids);
@@ -155,7 +155,7 @@ export default class MandatePreflight extends PluginCommand<PreflightResult> {
         scorecard: null,
         mandate: spec,
         mandateSource: source,
-        message: `无法读取报价 ${targetId}：${(e as Error).message}`,
+        message: `Cannot read quote ${targetId}: ${(e as Error).message}`,
       };
     }
 
@@ -166,14 +166,14 @@ export default class MandatePreflight extends PluginCommand<PreflightResult> {
       return { scorecard, mandate: spec, mandateSource: source };
     }
 
-    // 链上 mandate：principal 在 MandateRegistry 里授予该 agent 的边界。
+    // On-chain mandate: the limits the principal granted this agent in MandateRegistry.
     const agentAddr = (agent?.trim() || swap.walletAddress) as Address | undefined;
     if (!principal?.trim() || !rpcUrl?.trim() || !agentAddr) {
       return {
         scorecard: null,
         mandate: spec,
         mandateSource: source,
-        message: "--registry 需同时提供 --principal 与 --rpc-url（agent 默认取报价钱包地址，缺失时用 --agent 指定）。",
+        message: "--registry requires --principal and --rpc-url (the agent defaults to the quote's wallet address; pass --agent if it is missing).",
       };
     }
     let onchain: Awaited<ReturnType<typeof readOnchainMandate>>;
@@ -189,7 +189,7 @@ export default class MandatePreflight extends PluginCommand<PreflightResult> {
         scorecard: null,
         mandate: spec,
         mandateSource: source,
-        message: `读取链上 mandate 失败：${(e as Error).message}`,
+        message: `Failed to read the on-chain mandate: ${(e as Error).message}`,
       };
     }
 
@@ -213,7 +213,7 @@ export default class MandatePreflight extends PluginCommand<PreflightResult> {
     };
   }
 
-  /** 按 createdAt 取最近；无 createdAt 时取数组最后一个。 */
+  /** Latest by createdAt; falls back to the last id when createdAt is missing. */
   private pickLatest(
     store: { load(id: string): unknown },
     ids: string[],
@@ -229,13 +229,13 @@ export default class MandatePreflight extends PluginCommand<PreflightResult> {
           best = id;
         }
       } catch {
-        /* 跳过坏报价 */
+        /* skip unreadable quotes */
       }
     }
     return best;
   }
 
-  /** PersistedSwapQuote → ProposedSwap（归一化 + 单位换算）。 */
+  /** PersistedSwapQuote → ProposedSwap (normalisation + unit conversion). */
   private normalize(quoteId: string, loaded: unknown): ProposedSwap {
     const p = loaded as {
       createdAt?: string;
@@ -298,7 +298,7 @@ export default class MandatePreflight extends PluginCommand<PreflightResult> {
   }
 
   override successHint(data: PreflightResult): string {
-    if (!data.scorecard) return data.message ?? "无结果。";
+    if (!data.scorecard) return data.message ?? "No result.";
     const out = renderScorecard(data.scorecard, data.mandateSource);
     const a = data.attestation;
     if (!a) return out;

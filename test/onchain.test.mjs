@@ -1,7 +1,7 @@
 /**
- * onchain.js 集成测试：起本地 anvil → forge 部署 MandateRegistry → cast 写 mandate → 插件读回。
- * 断言锚定在「我们用 cast 写进去的原值」，不复用插件自己的换算逻辑。
- * 跑：npm run build && node test/onchain.test.mjs   （需要 ~/.foundry/bin 下的 anvil/forge/cast）
+ * onchain.js integration test: local anvil → forge deploys MandateRegistry → cast writes a mandate → plugin reads it back.
+ * Assertions are anchored to the raw values written with cast, not to the plugin's own conversion code.
+ * Run: npm run build && node test/onchain.test.mjs   (needs anvil/forge/cast in ~/.foundry/bin)
  */
 import assert from "node:assert/strict";
 import { execFileSync, spawn } from "node:child_process";
@@ -19,7 +19,7 @@ const BIN = process.env.FOUNDRY_BIN ?? join(homedir(), ".foundry", "bin");
 const exe = (n) => join(BIN, process.platform === "win32" ? `${n}.exe` : n);
 const PORT = 8547;
 const RPC = `http://127.0.0.1:${PORT}`;
-// anvil 默认助记词的前两个账户（公开测试密钥，仅本地链）
+// First two accounts of anvil's default mnemonic (public test keys, local chain only)
 const PRINCIPAL_PK = "0xac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80";
 const PRINCIPAL = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
 const AGENT_PK = "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d";
@@ -37,7 +37,7 @@ const t = async (name, fn) => {
 };
 
 // ---------- pure ----------
-await t("onchainToSpec: cents→USD、其余字段原样", () => {
+await t("onchainToSpec: cents→USD, other fields unchanged", () => {
   const s = onchainToSpec({
     maxUsdPerTradeCents: 123456n,
     maxSlippageBps: 80,
@@ -58,17 +58,17 @@ await t("onchainToSpec: cents→USD、其余字段原样", () => {
     recipientMustBeSelf: true,
   });
 });
-await t("canonicalJson: 键序无关、丢弃 undefined", () => {
+await t("canonicalJson: key order independent, drops undefined", () => {
   assert.equal(canonicalJson({ b: 1, a: [2, { d: undefined, c: 3 }] }), '{"a":[2,{"c":3}],"b":1}');
   assert.equal(canonicalJson({ a: 1, b: 2 }), canonicalJson({ b: 2, a: 1 }));
 });
-await t("scorecardHash: 键序不同的同一 scorecard 哈希相同，内容不同则不同", () => {
+await t("scorecardHash: same scorecard in any key order hashes equal; different content differs", () => {
   const a = { quoteId: "q", verdict: "warn", dimensions: [], notes: [] };
   const b = { notes: [], dimensions: [], verdict: "warn", quoteId: "q" };
   assert.equal(scorecardHash(a), scorecardHash(b));
   assert.notEqual(scorecardHash(a), scorecardHash({ ...a, verdict: "fail" }));
 });
-await t("quoteHash 与 cast keccak 一致（独立实现对照）", () => {
+await t("quoteHash matches cast keccak (independent implementation)", () => {
   assert.equal(quoteHash("quote-abc"), run("cast", ["keccak", "quote-abc"]).trim());
 });
 
@@ -91,7 +91,7 @@ try {
   );
   const registry = out.match(/Deployed to: (0x[0-9a-fA-F]{40})/)[1];
 
-  await t("未设置时 active=false、version=0", async () => {
+  await t("unset mandate → active=false, version=0", async () => {
     const m = await readOnchainMandate({ rpcUrl: RPC, registry, principal: PRINCIPAL, agent: AGENT });
     assert.equal(m.active, false);
     assert.equal(m.version, 0);
@@ -104,7 +104,7 @@ try {
     "--rpc-url", RPC, "--private-key", PRINCIPAL_PK,
   ]);
 
-  await t("cast 写入的 mandate 被插件原样读回（$2,500 / 75 / 110 / 40 / false,true,true）", async () => {
+  await t("mandate written with cast is read back unchanged ($2,500 / 75 / 110 / 40 / false,true,true)", async () => {
     const m = await readOnchainMandate({ rpcUrl: RPC, registry, principal: PRINCIPAL, agent: AGENT });
     assert.equal(m.active, true);
     assert.equal(m.version, 1);
@@ -119,7 +119,7 @@ try {
     });
   });
 
-  await t("agent 用插件给出的哈希 attest 成功，事件里的值与之一致", async () => {
+  await t("agent attests with the plugin's hashes; the event carries the same values", async () => {
     const qh = quoteHash("quote-xyz");
     const sh = scorecardHash({ quoteId: "quote-xyz", verdict: "warn", dimensions: [], notes: [] });
     const rcpt = JSON.parse(
@@ -131,13 +131,13 @@ try {
     );
     assert.equal(rcpt.status, "0x1");
     const log = rcpt.logs[0];
-    assert.equal(log.topics[3], qh, "quoteHash 是第三个 indexed topic");
-    assert.ok(log.data.toLowerCase().endsWith(sh.slice(2).toLowerCase()), "scorecardHash 在 data 末尾");
+    assert.equal(log.topics[3], qh, "quoteHash is the third indexed topic");
+    assert.ok(log.data.toLowerCase().endsWith(sh.slice(2).toLowerCase()), "scorecardHash is at the end of data");
   });
 
   run("cast", ["send", registry, "revoke(address)", AGENT, "--rpc-url", RPC, "--private-key", PRINCIPAL_PK]);
 
-  await t("principal 撤销后插件读到 inactive、version=2", async () => {
+  await t("after the principal revokes, the plugin reads inactive, version=2", async () => {
     const m = await readOnchainMandate({ rpcUrl: RPC, registry, principal: PRINCIPAL, agent: AGENT });
     assert.equal(m.active, false);
     assert.equal(m.version, 2);

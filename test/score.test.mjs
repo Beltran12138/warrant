@@ -1,6 +1,6 @@
 /**
- * score.js 纯逻辑单测（不依赖 mm/ctx，独立断言，避免实现与断言共享失败模式）。
- * 跑：node test/score.test.mjs（先 npm run build）
+ * score.js unit tests (no mm/ctx; assertions are independent so implementation and test cannot share a mistake).
+ * Run: node test/score.test.mjs (after npm run build)
  */
 import assert from "node:assert/strict";
 import {
@@ -19,19 +19,19 @@ const t = (name, fn) => {
 
 const SELF = "0xabc0000000000000000000000000000000000001";
 
-// 单位换算
-t("percentToFraction: mm 的 0.5 (%) → 0.005", () => {
+// Unit conversion
+t("percentToFraction: mm's 0.5 (%) → 0.005", () => {
   assert.equal(percentToFraction(0.5), 0.005);
 });
-t("normalizeImpact: 分数 0.0123 原样", () => {
+t("normalizeImpact: fraction 0.0123 unchanged", () => {
   assert.equal(normalizeImpact(0.0123), 0.0123);
 });
-t("normalizeImpact: >1 视为百分数 1.23 → 0.0123", () => {
+t("normalizeImpact: >1 treated as percent, 1.23 → 0.0123", () => {
   assert.ok(Math.abs(normalizeImpact(1.23) - 0.0123) < 1e-9);
 });
 
-// 干净小额交易 → 全 pass
-t("干净交易 → SUITABLE(pass)", () => {
+// Clean small trade → all pass
+t("clean trade → SUITABLE (pass)", () => {
   const sc = scoreSwap(
     {
       quoteId: "q1",
@@ -53,8 +53,8 @@ t("干净交易 → SUITABLE(pass)", () => {
   assert.equal(sc.verdict, "pass", JSON.stringify(sc.dimensions));
 });
 
-// 超额 + 高滑点 → fail
-t("超额+高滑点 → UNSUITABLE(fail)", () => {
+// Oversized + high slippage → fail
+t("oversized + high slippage → UNSUITABLE (fail)", () => {
   const sc = scoreSwap(
     {
       quoteId: "q2",
@@ -74,8 +74,8 @@ t("超额+高滑点 → UNSUITABLE(fail)", () => {
   assert.equal(sc.dimensions.find((d) => d.key === "slippage")?.severity, "fail");
 });
 
-// 收款到外部地址 → fail（默认 recipientMustBeSelf）
-t("外部收款地址 → recipient fail", () => {
+// Payout to an external address → fail (recipientMustBeSelf by default)
+t("external recipient → recipient fail", () => {
   const sc = scoreSwap(
     {
       quoteId: "q3",
@@ -92,8 +92,8 @@ t("外部收款地址 → recipient fail", () => {
   assert.equal(sc.verdict, "fail");
 });
 
-// 跨链 + 需授权 → warn（默认都允许）
-t("跨链+需授权 → REVIEW(warn)", () => {
+// Cross-chain + needs approval → warn (both allowed by default)
+t("cross-chain + approval → REVIEW (warn)", () => {
   const sc = scoreSwap(
     {
       quoteId: "q4",
@@ -113,7 +113,7 @@ t("跨链+需授权 → REVIEW(warn)", () => {
   assert.equal(sc.verdict, "warn");
 });
 
-// 最坏情况损失计算
+// Worst-case loss
 t("worstCaseLossUsd = (dest-minDest)/dest * toUsd", () => {
   const sc = scoreSwap(
     {
@@ -126,15 +126,15 @@ t("worstCaseLossUsd = (dest-minDest)/dest * toUsd", () => {
       toUsd: 100,
       slippage: percentToFraction(0.5),
       destAmount: 1000,
-      minDestAmount: 990, // 1% 触底
+      minDestAmount: 990, // 1% floor
     },
     DEFAULT_MANDATE,
   );
   assert.ok(Math.abs((sc.worstCaseLossUsd ?? 0) - 1.0) < 1e-9, `got ${sc.worstCaseLossUsd}`);
 });
 
-// mandate 覆盖：禁跨链 → 跨链 fail
-t("禁跨链 mandate → crossChain fail", () => {
+// Mandate override: no cross-chain → cross-chain fail
+t("no-cross-chain mandate → crossChain fail", () => {
   const sc = scoreSwap(
     {
       quoteId: "q6",

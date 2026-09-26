@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { DEFAULT_MANDATE, type MandateSpec } from "./score.js";
 
-/** 从 cwd 的 mandate.json 读取部分/全部 mandate 字段，缺失项回落默认。找不到文件=返回默认。 */
+/** Read mandate fields from mandate.json in cwd; missing fields and a missing file fall back to defaults. */
 export function loadMandate(cwd = process.cwd(), file = "mandate.json"): {
   spec: MandateSpec;
   source: string;
@@ -16,7 +16,7 @@ export function loadMandate(cwd = process.cwd(), file = "mandate.json"): {
   }
 }
 
-/** 把部分覆盖合并到默认值上，做类型/范围校验，非法项忽略并回落默认。 */
+/** Merge overrides onto the defaults with type/range checks; invalid values are ignored. */
 export function mergeMandate(over: Partial<MandateSpec>): MandateSpec {
   const s: MandateSpec = { ...DEFAULT_MANDATE };
   const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : undefined);

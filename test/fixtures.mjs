@@ -1,4 +1,4 @@
-/** 合成报价样例（demo 与链上 demo 共用）。字段语义见 src/lib/score.ts 的 ProposedSwap。 */
+/** Synthetic quotes shared by the offline and on-chain demos. Field semantics: ProposedSwap in src/lib/score.ts. */
 export const SELF = "0xA11ce0000000000000000000000000000000dEaD";
 
 export const clean = {
