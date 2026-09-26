@@ -29,9 +29,6 @@
     "topics": {
       "mandate": {
         "description": "Preflight trade-suitability reveal before an agent trades"
-      },
-      "hello": {
-        "description": "Smoke-test command from the plugin template"
       }
     }
   },
@@ -51,25 +48,6 @@
           "fees",
           "accounts"
         ]
-      },
-      {
-        "id": "mandate:introspect",
-        "capabilities": [
-          "wallet-read"
-        ],
-        "dataAccess": [
-          "accounts",
-          "balances",
-          "prices",
-          "tokens",
-          "fees",
-          "network"
-        ]
-      },
-      {
-        "id": "hello:ping",
-        "capabilities": [],
-        "dataAccess": []
       }
     ]
   },
@@ -84,5 +62,9 @@
     "@metamask/agent-wallet": "^6.2.0",
     "oclif": "^4",
     "typescript": "^5"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Beltran12138/mandate"
   }
 }

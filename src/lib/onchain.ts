@@ -1,5 +1,5 @@
 import { createPublicClient, http, keccak256, stringToHex, type Address, type Hex } from "viem";
-import type { MandateSpec, Scorecard, Severity } from "./score.js";
+import { scoreSwap, type MandateSpec, type ProposedSwap, type Scorecard, type Severity } from "./score.js";
 
 /** Minimal ABI slice of contracts/src/MandateRegistry.sol used by the plugin. */
 export const MANDATE_REGISTRY_ABI = [
@@ -86,6 +86,20 @@ export async function readOnchainMandate(opts: {
     expiresAt: Number(m.expiresAt),
     source: `onchain:${chainId}:${opts.registry} principal=${opts.principal} agent=${opts.agent}`,
   };
+}
+
+/** Score a swap against an on-chain mandate; a missing/revoked/expired mandate forces verdict=fail. */
+export function scoreAgainstOnchain(swap: ProposedSwap, onchain: OnchainMandate): Scorecard {
+  const scorecard = scoreSwap(swap, onchain.spec);
+  if (!onchain.active) {
+    scorecard.verdict = "fail";
+    scorecard.notes.unshift(
+      onchain.version === 0
+        ? "链上没有该 principal 授予此 agent 的 mandate：agent 未获授权。"
+        : `链上 mandate v${onchain.version} 已撤销或过期：agent 当前未获授权。`,
+    );
+  }
+  return scorecard;
 }
 
 /** Verdict enum index in MandateRegistry (Pass=0, Warn=1, Fail=2). */

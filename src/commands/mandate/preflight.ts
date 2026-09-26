@@ -16,7 +16,13 @@ import {
   scoreSwap,
 } from "../../lib/score.js";
 import { loadMandate } from "../../lib/spec.js";
-import { quoteHash, readOnchainMandate, scorecardHash, VERDICT_INDEX } from "../../lib/onchain.js";
+import {
+  quoteHash,
+  readOnchainMandate,
+  scoreAgainstOnchain,
+  scorecardHash,
+  VERDICT_INDEX,
+} from "../../lib/onchain.js";
 import type { Address } from "viem";
 
 const inputs = {
@@ -187,15 +193,7 @@ export default class MandatePreflight extends PluginCommand<PreflightResult> {
       };
     }
 
-    const scorecard = scoreSwap(swap, onchain.spec);
-    if (!onchain.active) {
-      scorecard.verdict = "fail";
-      scorecard.notes.unshift(
-        onchain.version === 0
-          ? "链上没有该 principal 授予此 agent 的 mandate：agent 未获授权。"
-          : `链上 mandate v${onchain.version} 已撤销或过期：agent 当前未获授权。`,
-      );
-    }
+    const scorecard = scoreAgainstOnchain(swap, onchain);
     return {
       scorecard,
       mandate: onchain.spec,
