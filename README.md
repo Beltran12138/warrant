@@ -357,6 +357,11 @@ to the values written with `cast`, not to the plugin's own conversion code.
   (reproduced from that quote's own fields), so a negative value is in the trader's favour. The
   scripted walkthroughs (`demo-onchain.mjs`, `demo-violations.mjs`) score the fixtures in
   `test/fixtures.mjs` so they stay reproducible; every warrant read, write and attestation is real.
+  A second real quote (`0x2ade8da4…5256`) went the whole way: preflight PASS → `mm wallet
+  sign-typed-data` by the server wallet → relayed through `WarrantReputation` on Monad testnet in
+  one tx, [`0x397aee33…7295`](https://testnet.monadvision.com/tx/0x397aee33947059aa23a82088254ea58a789e82b3ccd53b87cffe81c98dd97295),
+  whose `SignedPreflightAttested` carries the quote hash `0xaffb6c2f…d016` and scorecard hash
+  `0x2020c94f…91e1` that preflight printed, plus ERC-8004 feedback #3 for agent 1937.
   No real swap has been executed yet: the warrants live on testnets, the swaps on mainnet.
 - Testnet only. Not audited.
 
