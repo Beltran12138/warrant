@@ -17,6 +17,10 @@ import {
 } from "../../lib/score.js";
 import { loadWarrant } from "../../lib/spec.js";
 import {
+  fetchGasPrice,
+  MM_UNSUPPORTED_RPC_CHAINS,
+  type MmSendTransaction,
+  mmSendTransaction,
   quoteHash,
   readOnchainWarrant,
   scoreAgainstOnchain,
@@ -81,6 +85,8 @@ type Attestation = {
   quoteHash: string;
   verdict: number;
   scorecardHash: string;
+  /** The same attestation as an `mm wallet send-transaction` call, signed by the mm wallet itself. */
+  mm: MmSendTransaction;
 };
 
 type PreflightResult = {
@@ -194,22 +200,32 @@ export default class WarrantPreflight extends PluginCommand<PreflightResult> {
     }
 
     const scorecard = scoreAgainstOnchain(swap, onchain);
+    let attestation: Attestation | undefined;
+    if (onchain.active) {
+      const args = {
+        registry: registry.trim() as Address,
+        principal: principal.trim() as Address,
+        quoteHash: quoteHash(targetId),
+        warrantVersion: onchain.version,
+        verdict: VERDICT_INDEX[scorecard.verdict],
+        scorecardHash: scorecardHash(scorecard),
+      };
+      // mm cannot estimate fees on some chains; read the gas price from the warrant's own RPC.
+      const gasPrice = MM_UNSUPPORTED_RPC_CHAINS.has(onchain.chainId)
+        ? await fetchGasPrice(rpcUrl.trim()).catch(() => undefined)
+        : undefined;
+      attestation = {
+        ...args,
+        rpcUrl: rpcUrl.trim(),
+        agent: agentAddr,
+        mm: mmSendTransaction(args, onchain.chainId, gasPrice),
+      };
+    }
     return {
       scorecard,
       warrant: onchain.spec,
       warrantSource: `${onchain.source} v${onchain.version}${onchain.active ? "" : " (inactive)"}`,
-      attestation: onchain.active
-        ? {
-            rpcUrl: rpcUrl.trim(),
-            registry: registry.trim(),
-            principal: principal.trim(),
-            agent: agentAddr,
-            warrantVersion: onchain.version,
-            quoteHash: quoteHash(targetId),
-            verdict: VERDICT_INDEX[scorecard.verdict],
-            scorecardHash: scorecardHash(scorecard),
-          }
-        : undefined,
+      attestation,
     };
   }
 
@@ -302,6 +318,14 @@ export default class WarrantPreflight extends PluginCommand<PreflightResult> {
     const out = renderScorecard(data.scorecard, data.warrantSource);
     const a = data.attestation;
     if (!a) return out;
-    return `${out}\n\nAttest on-chain that this scorecard was shown before execution:\n  cast send ${a.registry} "attestPreflight(address,bytes32,uint32,uint8,bytes32)" ${a.principal} ${a.quoteHash} ${a.warrantVersion} ${a.verdict} ${a.scorecardHash} --rpc-url ${a.rpcUrl} --private-key $AGENT_PRIVATE_KEY   # signer must be agent ${a.agent}`;
+    return [
+      out,
+      "",
+      `Attest on-chain that this scorecard was shown before execution (the active mm wallet must be agent ${a.agent}):`,
+      `  ${a.mm.command}`,
+      ...(a.mm.note ? [`  note: ${a.mm.note}`] : []),
+      "Agent with its own key instead:",
+      `  cast send ${a.registry} "attestPreflight(address,bytes32,uint32,uint8,bytes32)" ${a.principal} ${a.quoteHash} ${a.warrantVersion} ${a.verdict} ${a.scorecardHash} --rpc-url ${a.rpcUrl} --private-key $AGENT_PRIVATE_KEY`,
+    ].join("\n");
   }
 }
