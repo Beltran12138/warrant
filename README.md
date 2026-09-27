@@ -201,8 +201,14 @@ to the values written with `cast`, not to the plugin's own conversion code.
 
 - **Reveal, not enforce.** A plugin cannot intercept `mm`'s native commands; an agent can skip
   preflight. The attestation makes skipping *detectable*, not impossible.
-- **Attestation signer.** The `mm` server wallet's keys are managed by the host, so it cannot sign
-  `attestPreflight`. The demo uses a separate agent EOA; the warrant is keyed to that address.
+- **Attestation signer.** The `mm` server wallet *can* sign `attestPreflight` through
+  `mm wallet send-transaction`: tested on Fuji, tx
+  [`0xb828bf71…72c5`](https://subnets-test.avax.network/c-chain/tx/0xb828bf7129e386171a63a94e04bcbc18b687b09197460397972c5da3d73f72c5)
+  (from the server wallet, `PreflightAttested` with verdict PASS, 30,788 gas). Two caveats as of
+  mm 6.2.0: Guard Mode asks for email/MFA approval for every transaction on a chain outside the
+  wallet's `allowed_chains` (Fuji is not in the default list), and on Monad testnet (10143) the
+  send fails before signing because MetaMask's RPC backend answers `Invalid chainId`. The scripted
+  demo therefore signs with a separate agent EOA; the warrant is keyed to that address.
 - **Prices are off-chain inputs.** USD values come from the quote. An attestation proves what the
   agent was shown, not that the price data was correct.
 - **Synthetic quotes in the demo.** A live `mm swap quote` needs a funded mainnet wallet; the
