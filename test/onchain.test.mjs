@@ -1,5 +1,5 @@
 /**
- * onchain.js integration test: local anvil → forge deploys MandateRegistry → cast writes a mandate → plugin reads it back.
+ * onchain.js integration test: local anvil → forge deploys WarrantRegistry → cast writes a warrant → plugin reads it back.
  * Assertions are anchored to the raw values written with cast, not to the plugin's own conversion code.
  * Run: npm run build && node test/onchain.test.mjs   (needs anvil/forge/cast in ~/.foundry/bin)
  */
@@ -11,7 +11,7 @@ import {
   canonicalJson,
   onchainToSpec,
   quoteHash,
-  readOnchainMandate,
+  readOnchainWarrant,
   scorecardHash,
 } from "../dist/lib/onchain.js";
 
@@ -86,26 +86,26 @@ try {
   const contracts = join(import.meta.dirname, "..", "contracts");
   const out = run(
     "forge",
-    ["create", "src/MandateRegistry.sol:MandateRegistry", "--rpc-url", RPC, "--private-key", PRINCIPAL_PK, "--broadcast"],
+    ["create", "src/WarrantRegistry.sol:WarrantRegistry", "--rpc-url", RPC, "--private-key", PRINCIPAL_PK, "--broadcast"],
     contracts,
   );
   const registry = out.match(/Deployed to: (0x[0-9a-fA-F]{40})/)[1];
 
-  await t("unset mandate → active=false, version=0", async () => {
-    const m = await readOnchainMandate({ rpcUrl: RPC, registry, principal: PRINCIPAL, agent: AGENT });
+  await t("unset warrant → active=false, version=0", async () => {
+    const m = await readOnchainWarrant({ rpcUrl: RPC, registry, principal: PRINCIPAL, agent: AGENT });
     assert.equal(m.active, false);
     assert.equal(m.version, 0);
   });
 
   run("cast", [
     "send", registry,
-    "setMandate(address,(uint64,uint16,uint16,uint16,bool,bool,bool,uint64))",
+    "setWarrant(address,(uint64,uint16,uint16,uint16,bool,bool,bool,uint64))",
     AGENT, "(250000,75,110,40,false,true,true,0)",
     "--rpc-url", RPC, "--private-key", PRINCIPAL_PK,
   ]);
 
-  await t("mandate written with cast is read back unchanged ($2,500 / 75 / 110 / 40 / false,true,true)", async () => {
-    const m = await readOnchainMandate({ rpcUrl: RPC, registry, principal: PRINCIPAL, agent: AGENT });
+  await t("warrant written with cast is read back unchanged ($2,500 / 75 / 110 / 40 / false,true,true)", async () => {
+    const m = await readOnchainWarrant({ rpcUrl: RPC, registry, principal: PRINCIPAL, agent: AGENT });
     assert.equal(m.active, true);
     assert.equal(m.version, 1);
     assert.deepEqual(m.spec, {
@@ -138,7 +138,7 @@ try {
   run("cast", ["send", registry, "revoke(address)", AGENT, "--rpc-url", RPC, "--private-key", PRINCIPAL_PK]);
 
   await t("after the principal revokes, the plugin reads inactive, version=2", async () => {
-    const m = await readOnchainMandate({ rpcUrl: RPC, registry, principal: PRINCIPAL, agent: AGENT });
+    const m = await readOnchainWarrant({ rpcUrl: RPC, registry, principal: PRINCIPAL, agent: AGENT });
     assert.equal(m.active, false);
     assert.equal(m.version, 2);
   });

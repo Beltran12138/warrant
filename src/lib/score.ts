@@ -1,6 +1,6 @@
 /**
- * Mandate preflight — pure scoring logic (no ctx, no network, unit-testable).
- * In: a ProposedSwap normalised from an mm stored swap quote + the principal's MandateSpec.
+ * Warrant preflight — pure scoring logic (no ctx, no network, unit-testable).
+ * In: a ProposedSwap normalised from an mm stored swap quote + the principal's WarrantSpec.
  * Out: a per-dimension suitability scorecard. Reveals, does not enforce.
  */
 
@@ -36,8 +36,8 @@ export interface ProposedSwap {
   requiresApproval?: boolean;
 }
 
-/** The limits a principal grants an agent (the mandate). Thresholds in bps (1% = 100bps). */
-export interface MandateSpec {
+/** The limits a principal grants an agent (the warrant). Thresholds in bps (1% = 100bps). */
+export interface WarrantSpec {
   maxUsdPerTrade: number;
   maxSlippageBps: number;
   maxPriceImpactBps: number;
@@ -47,7 +47,7 @@ export interface MandateSpec {
   recipientMustBeSelf: boolean;
 }
 
-export const DEFAULT_MANDATE: MandateSpec = {
+export const DEFAULT_WARRANT: WarrantSpec = {
   maxUsdPerTrade: 1000,
   maxSlippageBps: 100, // 1%
   maxPriceImpactBps: 150, // 1.5%
@@ -63,7 +63,7 @@ export interface Dimension {
   severity: Severity;
   /** Human-readable observed value. */
   observed: string;
-  /** The matching mandate limit, human-readable. */
+  /** The matching warrant limit, human-readable. */
   limit: string;
   /** One line on why this severity. */
   note: string;
@@ -97,7 +97,7 @@ function worst(sevs: Severity[]): Severity {
 }
 
 /** Render a scorecard as human-readable text (used by the CLI success hint; pure). */
-export function renderScorecard(sc: Scorecard, mandateSource: string): string {
+export function renderScorecard(sc: Scorecard, warrantSource: string): string {
   const icon: Record<Severity, string> = { pass: "✓", warn: "▲", fail: "✗" };
   const head: Record<Severity, string> = {
     pass: "SUITABLE",
@@ -105,8 +105,8 @@ export function renderScorecard(sc: Scorecard, mandateSource: string): string {
     fail: "UNSUITABLE",
   };
   const lines: string[] = [];
-  lines.push(`Mandate preflight — ${head[sc.verdict]}  (quote ${sc.quoteId})`);
-  lines.push(`mandate: ${mandateSource}`);
+  lines.push(`Warrant preflight — ${head[sc.verdict]}  (quote ${sc.quoteId})`);
+  lines.push(`warrant: ${warrantSource}`);
   lines.push("");
   for (const d of sc.dimensions) {
     lines.push(`  ${icon[d.severity]} ${d.label}: ${d.observed}  [limit ${d.limit}] — ${d.note}`);
@@ -118,19 +118,19 @@ export function renderScorecard(sc: Scorecard, mandateSource: string): string {
   return lines.join("\n");
 }
 
-export function scoreSwap(swap: ProposedSwap, mandate: MandateSpec): Scorecard {
+export function scoreSwap(swap: ProposedSwap, warrant: WarrantSpec): Scorecard {
   const dims: Dimension[] = [];
   const notes: string[] = [];
 
   // 1. Notional
   if (swap.fromUsd !== undefined) {
-    const sev: Severity = swap.fromUsd > mandate.maxUsdPerTrade ? "fail" : "pass";
+    const sev: Severity = swap.fromUsd > warrant.maxUsdPerTrade ? "fail" : "pass";
     dims.push({
       key: "size",
       label: "Trade size",
       severity: sev,
       observed: usd(swap.fromUsd),
-      limit: `≤ ${usd(mandate.maxUsdPerTrade)}`,
+      limit: `≤ ${usd(warrant.maxUsdPerTrade)}`,
       note: sev === "fail" ? "exceeds the per-trade limit" : "within limit",
     });
   }
@@ -138,27 +138,27 @@ export function scoreSwap(swap: ProposedSwap, mandate: MandateSpec): Scorecard {
   // 2. Slippage tolerance
   if (swap.slippage !== undefined) {
     const b = bps(swap.slippage);
-    const sev: Severity = b > mandate.maxSlippageBps ? "fail" : b > mandate.maxSlippageBps * 0.75 ? "warn" : "pass";
+    const sev: Severity = b > warrant.maxSlippageBps ? "fail" : b > warrant.maxSlippageBps * 0.75 ? "warn" : "pass";
     dims.push({
       key: "slippage",
       label: "Slippage tolerance",
       severity: sev,
       observed: `${pct(swap.slippage)} (${b}bps)`,
-      limit: `≤ ${mandate.maxSlippageBps}bps`,
-      note: sev === "fail" ? "slippage above mandate; sandwichable" : sev === "warn" ? "close to the limit" : "conservative",
+      limit: `≤ ${warrant.maxSlippageBps}bps`,
+      note: sev === "fail" ? "slippage above warrant; sandwichable" : sev === "warn" ? "close to the limit" : "conservative",
     });
   }
 
   // 3. Price impact
   if (swap.priceImpact !== undefined) {
     const b = bps(swap.priceImpact);
-    const sev: Severity = b > mandate.maxPriceImpactBps ? "fail" : b > mandate.maxPriceImpactBps * 0.75 ? "warn" : "pass";
+    const sev: Severity = b > warrant.maxPriceImpactBps ? "fail" : b > warrant.maxPriceImpactBps * 0.75 ? "warn" : "pass";
     dims.push({
       key: "priceImpact",
       label: "Price impact",
       severity: sev,
       observed: `${pct(swap.priceImpact)} (${b}bps)`,
-      limit: `≤ ${mandate.maxPriceImpactBps}bps`,
+      limit: `≤ ${warrant.maxPriceImpactBps}bps`,
       note: sev === "fail" ? "impact too high: thin pool or oversized order" : sev === "warn" ? "close to the limit" : "deep enough",
     });
   }
@@ -166,13 +166,13 @@ export function scoreSwap(swap: ProposedSwap, mandate: MandateSpec): Scorecard {
   // 4. Fee load
   if (swap.feeUsd !== undefined && swap.fromUsd !== undefined && swap.fromUsd > 0) {
     const feeBps = bps(swap.feeUsd / swap.fromUsd);
-    const sev: Severity = feeBps > mandate.maxFeeBps ? "fail" : feeBps > mandate.maxFeeBps * 0.75 ? "warn" : "pass";
+    const sev: Severity = feeBps > warrant.maxFeeBps ? "fail" : feeBps > warrant.maxFeeBps * 0.75 ? "warn" : "pass";
     dims.push({
       key: "fees",
       label: "Fee load",
       severity: sev,
       observed: `${usd(swap.feeUsd)} (${feeBps}bps)`,
-      limit: `≤ ${mandate.maxFeeBps}bps`,
+      limit: `≤ ${warrant.maxFeeBps}bps`,
       note: sev === "fail" ? "fees eat the trade" : sev === "warn" ? "fees on the high side" : "reasonable fees",
     });
   }
@@ -180,41 +180,41 @@ export function scoreSwap(swap: ProposedSwap, mandate: MandateSpec): Scorecard {
   // 5. Recipient
   if (swap.recipientAddress && swap.walletAddress) {
     const self = swap.recipientAddress.toLowerCase() === swap.walletAddress.toLowerCase();
-    const sev: Severity = self ? "pass" : mandate.recipientMustBeSelf ? "fail" : "warn";
+    const sev: Severity = self ? "pass" : warrant.recipientMustBeSelf ? "fail" : "warn";
     dims.push({
       key: "recipient",
       label: "Recipient",
       severity: sev,
       observed: self ? "self" : `→ ${swap.recipientAddress}`,
-      limit: mandate.recipientMustBeSelf ? "self only" : "any",
-      note: sev === "fail" ? "funds go to a foreign address; mandate forbids it" : self ? "back to this wallet" : "to an external address",
+      limit: warrant.recipientMustBeSelf ? "self only" : "any",
+      note: sev === "fail" ? "funds go to a foreign address; warrant forbids it" : self ? "back to this wallet" : "to an external address",
     });
   }
 
   // 6. Cross-chain
   if (swap.srcChainId !== undefined && swap.destChainId !== undefined) {
     const cross = swap.srcChainId !== swap.destChainId;
-    const sev: Severity = !cross ? "pass" : mandate.allowCrossChain ? "warn" : "fail";
+    const sev: Severity = !cross ? "pass" : warrant.allowCrossChain ? "warn" : "fail";
     dims.push({
       key: "crossChain",
       label: "Cross-chain",
       severity: sev,
       observed: cross ? `${swap.srcChainId} → ${swap.destChainId}` : `same (${swap.srcChainId})`,
-      limit: mandate.allowCrossChain ? "allowed" : "same-chain only",
-      note: sev === "fail" ? "mandate forbids cross-chain" : cross ? "bridging adds settlement and bridge risk" : "same chain",
+      limit: warrant.allowCrossChain ? "allowed" : "same-chain only",
+      note: sev === "fail" ? "warrant forbids cross-chain" : cross ? "bridging adds settlement and bridge risk" : "same chain",
     });
   }
 
   // 7. Approval
   if (swap.requiresApproval !== undefined) {
-    const sev: Severity = !swap.requiresApproval ? "pass" : mandate.allowNewApproval ? "warn" : "fail";
+    const sev: Severity = !swap.requiresApproval ? "pass" : warrant.allowNewApproval ? "warn" : "fail";
     dims.push({
       key: "approval",
       label: "ERC-20 approval",
       severity: sev,
       observed: swap.requiresApproval ? "required" : "none",
-      limit: mandate.allowNewApproval ? "allowed" : "no new approval",
-      note: sev === "fail" ? "mandate forbids new approvals" : swap.requiresApproval ? "needs an approval first; check it is not unlimited" : "no approval needed",
+      limit: warrant.allowNewApproval ? "allowed" : "no new approval",
+      note: sev === "fail" ? "warrant forbids new approvals" : swap.requiresApproval ? "needs an approval first; check it is not unlimited" : "no approval needed",
     });
   }
 
@@ -232,7 +232,7 @@ export function scoreSwap(swap: ProposedSwap, mandate: MandateSpec): Scorecard {
   }
 
   // Guard Mode 2FA hint (reveal only, never replaces the native decision)
-  if (swap.fromUsd !== undefined && swap.fromUsd > mandate.maxUsdPerTrade) {
+  if (swap.fromUsd !== undefined && swap.fromUsd > warrant.maxUsdPerTrade) {
     notes.push(
       "If native Guard Mode's 24h outflow limit is at or below this amount, execution will likely prompt 2FA. Preflight only reveals; it never replaces or bypasses the native check.",
     );

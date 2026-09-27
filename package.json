@@ -1,14 +1,14 @@
 {
-  "name": "mm-plugin-mandate",
+  "name": "mm-plugin-warrant",
   "version": "0.1.0",
-  "description": "Mandate — preflight trade-suitability reveal for MetaMask Agent Wallet",
+  "description": "Warrant — preflight trade-suitability reveal for MetaMask Agent Wallet",
   "license": "MIT",
   "type": "module",
   "keywords": [
     "oclif-plugin",
     "metamask",
     "agent-wallet",
-    "mandate",
+    "warrant",
     "preflight"
   ],
   "files": [
@@ -27,7 +27,7 @@
     "commands": "./dist/commands",
     "topicSeparator": " ",
     "topics": {
-      "mandate": {
+      "warrant": {
         "description": "Preflight trade-suitability reveal before an agent trades"
       }
     }
@@ -38,7 +38,7 @@
     "capabilities": [],
     "commands": [
       {
-        "id": "mandate:preflight",
+        "id": "warrant:preflight",
         "capabilities": [
           "wallet-read"
         ],
@@ -65,6 +65,6 @@
   },
   "repository": {
     "type": "git",
-    "url": "https://github.com/Beltran12138/mandate"
+    "url": "https://github.com/Beltran12138/warrant"
   }
 }

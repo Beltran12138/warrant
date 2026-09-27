@@ -4,7 +4,7 @@
  */
 import assert from "node:assert/strict";
 import {
-  DEFAULT_MANDATE,
+  DEFAULT_WARRANT,
   normalizeImpact,
   percentToFraction,
   scoreSwap,
@@ -48,7 +48,7 @@ t("clean trade → SUITABLE (pass)", () => {
       minDestAmount: 998_000,
       requiresApproval: false,
     },
-    DEFAULT_MANDATE,
+    DEFAULT_WARRANT,
   );
   assert.equal(sc.verdict, "pass", JSON.stringify(sc.dimensions));
 });
@@ -67,7 +67,7 @@ t("oversized + high slippage → UNSUITABLE (fail)", () => {
       priceImpact: 0.004,
       requiresApproval: false,
     },
-    DEFAULT_MANDATE,
+    DEFAULT_WARRANT,
   );
   assert.equal(sc.verdict, "fail");
   assert.equal(sc.dimensions.find((d) => d.key === "size")?.severity, "fail");
@@ -86,7 +86,7 @@ t("external recipient → recipient fail", () => {
       fromUsd: 100,
       slippage: percentToFraction(0.5),
     },
-    DEFAULT_MANDATE,
+    DEFAULT_WARRANT,
   );
   assert.equal(sc.dimensions.find((d) => d.key === "recipient")?.severity, "fail");
   assert.equal(sc.verdict, "fail");
@@ -106,7 +106,7 @@ t("cross-chain + approval → REVIEW (warn)", () => {
       priceImpact: 0.002,
       requiresApproval: true,
     },
-    DEFAULT_MANDATE,
+    DEFAULT_WARRANT,
   );
   assert.equal(sc.dimensions.find((d) => d.key === "crossChain")?.severity, "warn");
   assert.equal(sc.dimensions.find((d) => d.key === "approval")?.severity, "warn");
@@ -128,13 +128,13 @@ t("worstCaseLossUsd = (dest-minDest)/dest * toUsd", () => {
       destAmount: 1000,
       minDestAmount: 990, // 1% floor
     },
-    DEFAULT_MANDATE,
+    DEFAULT_WARRANT,
   );
   assert.ok(Math.abs((sc.worstCaseLossUsd ?? 0) - 1.0) < 1e-9, `got ${sc.worstCaseLossUsd}`);
 });
 
-// Mandate override: no cross-chain → cross-chain fail
-t("no-cross-chain mandate → crossChain fail", () => {
+// Warrant override: no cross-chain → cross-chain fail
+t("no-cross-chain warrant → crossChain fail", () => {
   const sc = scoreSwap(
     {
       quoteId: "q6",
@@ -145,7 +145,7 @@ t("no-cross-chain mandate → crossChain fail", () => {
       fromUsd: 100,
       slippage: percentToFraction(0.5),
     },
-    { ...DEFAULT_MANDATE, allowCrossChain: false },
+    { ...DEFAULT_WARRANT, allowCrossChain: false },
   );
   assert.equal(sc.dimensions.find((d) => d.key === "crossChain")?.severity, "fail");
 });

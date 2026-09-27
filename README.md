@@ -1,47 +1,97 @@
-# Mandate
+# Warrant
 
 **A prompt is not suitability.** When an AI agent trades for you, the only thing standing between
-"what you meant" and "what it did" is usually a sentence in a system prompt. Mandate turns that
-sentence into an on-chain object: a **versioned, revocable, expiring mandate** that a principal
+"what you meant" and "what it did" is usually a sentence in a system prompt. Warrant turns that
+sentence into an on-chain object: a **versioned, revocable, expiring warrant** that a principal
 grants to an agent, plus a **preflight** that scores every proposed trade against it and an
 **on-chain attestation** that the agent saw that scorecard before it acted.
 
-Mandate **reveals, it does not enforce.** It never custodies funds, never blocks a trade and never
+Warrant **reveals, it does not enforce.** It never custodies funds, never blocks a trade and never
 tries to bypass a wallet's own guard rails. What it adds is *verifiability*: after the fact anyone
 can check what the agent was allowed to do, and prove it was told the trade was out of bounds.
 
+> Renamed from "Mandate" on 2026-09-26 to avoid confusion with an unrelated project of the same
+> name. Contract, command and package names changed; nothing else did.
+
+## Why not just Guard Mode?
+
+The MetaMask Agent Wallet already ships a policy layer (Guard Mode). Its policy file expresses three
+things: address allow/block lists, allowed chains, and a rolling 24-hour USD outflow limit
+(read from `mm wallet policy template`, `@metamask/agent-wallet` 6.2.0). That is a **spend** limit.
+It cannot say "never accept more than 1% slippage", "not into a pool this thin", "not if fees eat
+0.8% of the trade", or "no new token approvals". Those are **suitability** limits, and four of
+Warrant's seven dimensions exist only here.
+
+| Dimension | Guard Mode policy | Warrant |
+|---|---|---|
+| Trade size | 24h outflow total (partial) | per-trade USD cap |
+| Slippage tolerance | — | ✓ |
+| Price impact | — | ✓ |
+| Fee load | — | ✓ |
+| Recipient is self | address allowlist (partial) | ✓ |
+| Cross-chain route | allowed chains (partial) | ✓ |
+| New ERC-20 approval | — | ✓ |
+
+Warrant is a complement, not a replacement: Guard Mode enforces spend, Warrant reveals suitability
+and leaves a public record.
+
+## Who it's for
+
+- **Principals** who let an agent trade (a person, a fund's risk desk, a DAO treasury): they set
+  the limits once on-chain and can revoke them at any time without touching the agent.
+- **Agent builders** on the MetaMask Agent Wallet: one command before each swap, and an audit trail
+  their users can check.
+- **Anyone reviewing an agent after the fact**: every attestation is public, so "was the agent told
+  this trade was out of bounds?" has a verifiable answer.
+
+## Architecture
+
 ```
-principal ──setMandate / revoke──▶ MandateRegistry (on-chain)
-                                         │ getMandate
-agent ── mm swap quote ──▶ mm mandate preflight ──▶ scorecard (pass / warn / fail)
+principal ──setWarrant / revoke──▶ WarrantRegistry (on-chain, per principal→agent, versioned)
+                                         │ getWarrant
+agent ── mm swap quote ──▶ mm warrant preflight ──▶ scorecard (pass / warn / fail)
                                          │
 agent ──attestPreflight(quoteHash, version, verdict, scorecardHash)──▶ PreflightAttested event
 ```
 
+| Layer | What | Where |
+|---|---|---|
+| Contract | `WarrantRegistry`: set / revoke / read warrants; `attestPreflight` emits an event bound to the current warrant version (stale or revoked versions revert) | `contracts/src/WarrantRegistry.sol` |
+| Scoring | 7-dimension scorer + worst-case loss, pure functions | `src/lib/score.ts` |
+| Chain I/O | read the warrant, canonical scorecard hash, quote hash | `src/lib/onchain.ts` |
+| CLI | `mm warrant preflight` plugin command | `src/commands/warrant/preflight.ts` |
+| Agent instructions | when to preflight, stop, ask, attest | `skills/warrant/SKILL.md` |
+| Live walkthrough | grant → preflight → attest → revoke on a real testnet | `scripts/demo-onchain.mjs` |
+
+**Tech stack:** Solidity 0.8.28 + Foundry 1.8.3 · TypeScript on Node 22+ · viem 2.56 ·
+MetaMask Agent Wallet plugin SDK (`@metamask/agent-wallet` 6.2.0, oclif) · Monad testnet ·
+Avalanche Fuji C-Chain.
+
 ## Deployments
 
-`MandateRegistry` has the **same address on both chains** (same deployer, nonce 0):
-`0xf0145a8b57fb97d352f7a650b4c4ae4488951f48`
+`WarrantRegistry` has the **same address on both chains** (same deployer, same nonce):
+`0x37cdFe2a144993dC3145367305fF66E29302E673`
 
 | Chain | Deploy tx | Explorer |
 |---|---|---|
-| Monad testnet (10143) | `0x2ba4bf3340da214190e65b3570f0a180267612af9857d3703237a0a6236a8567` | [contract](https://testnet.monadvision.com/address/0xf0145a8b57fb97d352f7a650b4c4ae4488951f48) |
-| Avalanche Fuji C-Chain (43113) | `0x08f47a1eb07909b48afe58e1974dc5c64d88d948ecb7eca2de6e1b3a80326521` | [contract](https://testnet.snowtrace.io/address/0xf0145a8b57fb97d352f7a650b4c4ae4488951f48) |
+| Monad testnet (10143) | `0x62d54a4690013a4a5c2fec2653d7442dfa3741f3bf0845c625eb37911f3d08a8` | [contract](https://testnet.monadvision.com/address/0x37cdFe2a144993dC3145367305fF66E29302E673) |
+| Avalanche Fuji C-Chain (43113) | `0xd224000c67d4c0146e70726481582c5a0e8a3e51f5521d0ac2c46a89309c68e9` | [contract](https://testnet.snowtrace.io/address/0x37cdFe2a144993dC3145367305fF66E29302E673) |
 
-Deployment records: `contracts/broadcast/Deploy.s.sol/{10143,43113}/`.
+Deployment records: `contracts/broadcast/Deploy.s.sol/{10143,43113}/`. The records also contain the
+first deployment under the old name (`MandateRegistry`, `0xf0145a8b…1f48`), kept as history.
 
 ### Live run (2026-09-26)
 
-`scripts/demo-onchain.mjs` executed on both chains: grant → preflight against the on-chain mandate
+`scripts/demo-onchain.mjs` executed on both chains: grant → preflight against the on-chain warrant
 → agent attests a PASS and a FAIL scorecard → principal revokes. Every transaction below returned
-`status = success` with one event log.
+`status = success` with one event log, sent to the registry above.
 
 | Step | Monad testnet | Avalanche Fuji |
 |---|---|---|
-| `setMandate` (principal) | [0x3bdf…a431](https://testnet.monadvision.com/tx/0x3bdfda2a184a025145aa378a6ba99d86b12b905e22912118f19311a0ec5aa431) | [0xd681…1a10](https://testnet.snowtrace.io/tx/0xd6817e8df118d6fc50eaff0a4101daeed17e49c916fc1c1134c8b41248271a10) |
-| `attestPreflight` PASS (agent) | [0x1eeb…2cf2](https://testnet.monadvision.com/tx/0x1eebf9dd70c43ef980b81583b569828104bb10934ce1b0cb75bc04f2e5fc2cf2) | [0x0dfe…064c](https://testnet.snowtrace.io/tx/0x0dfe6bae7c3d3ed8f677c0453acf74021df4a6c565efebf0a32eaabf0f97064c) |
-| `attestPreflight` FAIL (agent) | [0xbb16…b5fa](https://testnet.monadvision.com/tx/0xbb16ed3226717ca1f2deef6ecb17c0c264e3830e9d9d68aea02ffc2679a0b5fa) | [0x21b8…b339](https://testnet.snowtrace.io/tx/0x21b835c923faab522462ed545d1442fc9450e6d1b9a37d0e111d21400c92b339) |
-| `revoke` (principal) | [0x3a9d…3d85](https://testnet.monadvision.com/tx/0x3a9dcbef64046488daf773409915b5b94854b798bd95aee5941cc5c114883d85) | [0x543b…3bbe](https://testnet.snowtrace.io/tx/0x543b13379e7fd9a1ab0294268d7332e671cc9eeee2e8bcabf48d7e13afb93bbe) |
+| `setWarrant` (principal) | [0xf864…fbf8](https://testnet.monadvision.com/tx/0xf864dd0ec67595c2ec9a8d37dc3b47eff81f908e2f3bf1926ddbe9589799fbf8) | [0x50a8…df54](https://testnet.snowtrace.io/tx/0x50a8b98edd9cf915439a07447d65cea4487730d7b1146e9100c2057ec50bdf54) |
+| `attestPreflight` PASS (agent) | [0x5fc8…9d5e](https://testnet.monadvision.com/tx/0x5fc8fc5be73a3a271b8a2c81c427e0bf46ebc184577f0aa5d58e4cca18519d5e) | [0xc719…cbca](https://testnet.snowtrace.io/tx/0xc719476886416fcaeffd5b71dd83d43a633feeb70c9dfa6e3bda1a233b1cbcba) |
+| `attestPreflight` FAIL (agent) | [0x18d4…9a0e](https://testnet.monadvision.com/tx/0x18d47b23caef0c8ce5cb723cb7f85539c484f80714b79e3d5f2d24380bc09a0e) | [0x27a2…bfc9](https://testnet.snowtrace.io/tx/0x27a24f90be45dda3b13a4a88f7e87ebcbe56779b0421b157122de663b266bfc9) |
+| `revoke` (principal) | [0xc7db…5921](https://testnet.monadvision.com/tx/0xc7dbd61cf6266707e21c05118e7b80f7dbe014661733d4b2843e902963f55921) | [0x90e7…4400](https://testnet.snowtrace.io/tx/0x90e76b8466de0a01953cd0479424a79b62ada3036a938a0b483444fa637c4400) |
 
 Principal `0xe4ebDEbd84f80bF592ca61C6eA56d10568D23aeA`, agent `0xeb114deDc3883A4300fa0bBC29F5590607c0789E`
 (throwaway testnet wallets).
@@ -51,22 +101,21 @@ Principal `0xe4ebDEbd84f80bF592ca61C6eA56d10568D23aeA`, agent `0xeb114deDc3883A4
 The contract is plain Solidity 0.8.28 with no chain-specific precompiles; the same bytecode runs on
 both networks. What differs is why each chain matters for this use case.
 
-**Monad.** Mandate is built as a plugin for the MetaMask Agent Wallet (`mm`) CLI, and the on-chain
+**Monad.** Warrant is built as a plugin for the MetaMask Agent Wallet (`mm`) CLI, and the on-chain
 half lives on Monad testnet. An agent that trades at machine frequency needs a pre-trade
 attestation per quote; that is only reasonable on a chain with high throughput and fast blocks.
-Measured cost of one `attestPreflight` on Monad testnet: 35,176 gas at 102 gwei = 0.0036 MON.
+Measured cost of one `attestPreflight` on Monad testnet: 35,130 gas at 102 gwei = 0.0036 MON.
 
 **Avalanche.** Same contract on the Fuji C-Chain. Sub-second finality means the attestation is
 final before the agent's trade would be, so "the agent was told first" is true in wall-clock
-order, not just in intent. Measured cost of one `attestPreflight` on Fuji: 30,834 gas at a
-160 wei gas price, i.e. effectively free. This build does not use Avalanche L1s, ICM or x402; a
-per-principal L1 or x402-metered attestations are natural next steps but are not implemented here.
+order, not just in intent. Measured cost of one `attestPreflight` on Fuji: 30,788 gas at a
+160 wei gas price, i.e. effectively free. This build does not use Avalanche L1s, ICM or x402.
 
 ## What the preflight checks
 
-Seven dimensions, each `pass` / `warn` / `fail` against the mandate:
+Seven dimensions, each `pass` / `warn` / `fail` against the warrant:
 
-| Dimension | Mandate field |
+| Dimension | Warrant field |
 |---|---|
 | Trade size (USD) | `maxUsdPerTrade` |
 | Slippage tolerance | `maxSlippageBps` |
@@ -77,7 +126,7 @@ Seven dimensions, each `pass` / `warn` / `fail` against the mandate:
 | New ERC-20 approval | `allowNewApproval` |
 
 Plus a worst-case realised loss (slippage to `minDestAmount`) and a note when the trade would
-likely trip the wallet's native Guard Mode 2FA. If the on-chain mandate is missing, revoked or
+likely trip the wallet's native Guard Mode 2FA. If the on-chain warrant is missing, revoked or
 expired, the verdict is forced to `fail`: the agent is not authorised.
 
 ## Quick start
@@ -98,11 +147,11 @@ in `node_modules`, so the host's `instanceof PluginCommand` check fails with
 `PLUGIN_INVALID_BASE`. `relink.cjs` replaces it with a junction to the global copy. Re-run it after
 every `npm install`.
 
-Grant a mandate (principal), on either chain:
+Grant a warrant (principal), on either chain:
 
 ```bash
-cast send 0xf0145a8b57fb97d352f7a650b4c4ae4488951f48 \
-  "setMandate(address,(uint64,uint16,uint16,uint16,bool,bool,bool,uint64))" \
+cast send 0x37cdFe2a144993dC3145367305fF66E29302E673 \
+  "setWarrant(address,(uint64,uint16,uint16,uint16,bool,bool,bool,uint64))" \
   <AGENT> "(100000,100,150,50,true,true,true,0)" \
   --rpc-url https://api.avax-test.network/ext/bc/C/rpc --private-key $PRINCIPAL_KEY
 ```
@@ -111,27 +160,26 @@ Preflight a pending quote against it (agent):
 
 ```bash
 mm swap quote ...                     # creates a stored quote
-mm mandate preflight \
-  --registry 0xf0145a8b57fb97d352f7a650b4c4ae4488951f48 \
+mm warrant preflight \
+  --registry 0x37cdFe2a144993dC3145367305fF66E29302E673 \
   --principal <PRINCIPAL> \
   --rpc-url https://testnet-rpc.monad.xyz
 ```
 
 The output ends with the exact `cast send … attestPreflight(…)` command for the agent to record
-the disclosure on-chain. Without `--registry`, preflight falls back to a local `mandate.json`
-(see `mandate.example.json`).
+the disclosure on-chain. Without `--registry`, preflight falls back to a local `warrant.json`
+(see `warrant.example.json`).
 
 Live walkthrough without `mm` (uses synthetic quotes, real chain):
 
 ```bash
-node scripts/demo-onchain.mjs monad   # or: fuji
+cp contracts/.env.example contracts/.env   # then put two funded testnet keys in it
+node scripts/demo-onchain.mjs monad        # or: fuji
 ```
-
-Needs `contracts/.env` with funded `DEPLOYER_PRIVATE_KEY` (principal) and `AGENT_PRIVATE_KEY`.
 
 ## Agent skill
 
-`skills/mandate/SKILL.md` tells an agent to run preflight before every swap, stop on `fail`,
+`skills/warrant/SKILL.md` tells an agent to run preflight before every swap, stop on `fail`,
 ask the human on `warn`, attest before executing, and never split or reshape a trade to get under
 a threshold.
 
@@ -143,7 +191,7 @@ git clone --depth 1 https://github.com/foundry-rs/forge-std contracts/lib/forge-
 cd contracts && forge test            # contract (13)
 ```
 
-The integration test deploys to a local anvil, writes a mandate with `cast`, reads it back through
+The integration test deploys to a local anvil, writes a warrant with `cast`, reads it back through
 the plugin, attests with the hashes the plugin produces, and revokes. Its assertions are anchored
 to the values written with `cast`, not to the plugin's own conversion code.
 
@@ -152,11 +200,11 @@ to the values written with `cast`, not to the plugin's own conversion code.
 - **Reveal, not enforce.** A plugin cannot intercept `mm`'s native commands; an agent can skip
   preflight. The attestation makes skipping *detectable*, not impossible.
 - **Attestation signer.** The `mm` server wallet's keys are managed by the host, so it cannot sign
-  `attestPreflight`. The demo uses a separate agent EOA; the mandate is keyed to that address.
+  `attestPreflight`. The demo uses a separate agent EOA; the warrant is keyed to that address.
 - **Prices are off-chain inputs.** USD values come from the quote. An attestation proves what the
   agent was shown, not that the price data was correct.
 - **Synthetic quotes in the demo.** A live `mm swap quote` needs a funded mainnet wallet; the
-  demo scores two fixed fixtures (`test/fixtures.mjs`). Every mandate read and write is real.
+  demo scores two fixed fixtures (`test/fixtures.mjs`). Every warrant read and write is real.
 - Testnet only. Not audited.
 
 ## Pre-existing work and build window
@@ -166,8 +214,9 @@ Both hackathons allow a pre-existing foundation if it is disclosed. Timeline:
 | Date | Work | Evidence |
 |---|---|---|
 | 2026-09-03 | Scaffolding cloned from MetaMask's `agent-wallet-plugin-template` (MIT): build config, plugin wiring, a `hello ping` sample and a security-scan workflow. The sample and workflow were removed on 2026-09-26. | `LICENSE` keeps MetaMask's notice |
-| 2026-09-03 → 09-14 | `mm mandate preflight` command, 7-dimension scoring (`src/lib/score.ts`), mandate loader (`src/lib/spec.ts`), unit tests, offline demo. | File modification dates; snapshot commit `10d4f25` |
-| 2026-09-25 → | `MandateRegistry` contract and tests, on-chain preflight (`src/lib/onchain.ts`), anvil integration test, deployments to Monad testnet and Fuji, live demo, agent skill, this README. | Commits from `b923d94` on |
+| 2026-09-03 → 09-14 | Preflight command, 7-dimension scoring (`src/lib/score.ts`), limits loader (`src/lib/spec.ts`), unit tests, offline demo. | File modification dates; snapshot commit `10d4f25` |
+| 2026-09-25 → | Registry contract and tests, on-chain preflight (`src/lib/onchain.ts`), anvil integration test, deployments to Monad testnet and Fuji, live demo, agent skill, this README. | Commits from `b923d94` on |
+| 2026-09-26 | Renamed Mandate → Warrant; redeployed as `WarrantRegistry`. | This commit and later |
 
 **Version control started late.** The repository was only put under git on 2026-09-25, so work from
 09-03 to 09-14 appears as one snapshot commit instead of its own history. No commit is backdated.
@@ -182,11 +231,13 @@ Both hackathons allow a pre-existing foundation if it is disclosed. Timeline:
 
 This project was built with AI coding tools, as both hackathons require to be disclosed:
 
-- **Claude Code** (Anthropic; Claude Opus models, Opus 5.5 for the work from 2026-09-25) wrote most of the code, tests, scripts and
-  this README under the author's direction; commits it co-authored carry a `Co-Authored-By` trailer.
-- On 2026-09-14 the design was critiqued by several other AI models (a "council" review). That
-  review is why Mandate reveals instead of enforcing: an `mm` plugin cannot intercept native
-  commands, so an enforcement layer would be bypassable by construction.
+- **Claude Code** (Anthropic; Claude Opus models, Opus 5.5 for the work from 2026-09-25) wrote most
+  of the code, tests, scripts and this README under the author's direction; commits it co-authored
+  carry a `Co-Authored-By` trailer.
+- The design was critiqued twice by a panel of other AI models ("council" reviews, 2026-09-14 and
+  2026-09-26). The first is why Warrant reveals instead of enforcing: an `mm` plugin cannot
+  intercept native commands, so an enforcement layer would be bypassable by construction. The
+  second surfaced the naming collision and the Guard Mode positioning above.
 - Product thesis, scope, and every go/no-go decision are the author's. Each on-chain claim in this
   README was checked against transaction receipts.
 

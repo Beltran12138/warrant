@@ -1,11 +1,11 @@
 import { createPublicClient, http, keccak256, stringToHex, type Address, type Hex } from "viem";
-import { scoreSwap, type MandateSpec, type ProposedSwap, type Scorecard, type Severity } from "./score.js";
+import { scoreSwap, type WarrantSpec, type ProposedSwap, type Scorecard, type Severity } from "./score.js";
 
-/** Minimal ABI slice of contracts/src/MandateRegistry.sol used by the plugin. */
-export const MANDATE_REGISTRY_ABI = [
+/** Minimal ABI slice of contracts/src/WarrantRegistry.sol used by the plugin. */
+export const WARRANT_REGISTRY_ABI = [
   {
     type: "function",
-    name: "getMandate",
+    name: "getWarrant",
     stateMutability: "view",
     inputs: [
       { name: "principal", type: "address" },
@@ -13,7 +13,7 @@ export const MANDATE_REGISTRY_ABI = [
     ],
     outputs: [
       {
-        name: "mandate",
+        name: "warrant",
         type: "tuple",
         components: [
           { name: "maxUsdPerTradeCents", type: "uint64" },
@@ -32,7 +32,7 @@ export const MANDATE_REGISTRY_ABI = [
   },
 ] as const;
 
-export interface OnchainMandateTuple {
+export interface OnchainWarrantTuple {
   maxUsdPerTradeCents: bigint;
   maxSlippageBps: number;
   maxPriceImpactBps: number;
@@ -43,8 +43,8 @@ export interface OnchainMandateTuple {
   expiresAt: bigint;
 }
 
-export interface OnchainMandate {
-  spec: MandateSpec;
+export interface OnchainWarrant {
+  spec: WarrantSpec;
   version: number;
   active: boolean;
   expiresAt: number;
@@ -52,8 +52,8 @@ export interface OnchainMandate {
   source: string;
 }
 
-/** Contract tuple → plugin MandateSpec (cents → USD). Pure, unit-tested. */
-export function onchainToSpec(m: OnchainMandateTuple): MandateSpec {
+/** Contract tuple → plugin WarrantSpec (cents → USD). Pure, unit-tested. */
+export function onchainToSpec(m: OnchainWarrantTuple): WarrantSpec {
   return {
     maxUsdPerTrade: Number(m.maxUsdPerTradeCents) / 100,
     maxSlippageBps: m.maxSlippageBps,
@@ -65,18 +65,18 @@ export function onchainToSpec(m: OnchainMandateTuple): MandateSpec {
   };
 }
 
-export async function readOnchainMandate(opts: {
+export async function readOnchainWarrant(opts: {
   rpcUrl: string;
   registry: Address;
   principal: Address;
   agent: Address;
-}): Promise<OnchainMandate> {
+}): Promise<OnchainWarrant> {
   const client = createPublicClient({ transport: http(opts.rpcUrl) });
   const chainId = await client.getChainId();
   const [m, version, active] = await client.readContract({
     address: opts.registry,
-    abi: MANDATE_REGISTRY_ABI,
-    functionName: "getMandate",
+    abi: WARRANT_REGISTRY_ABI,
+    functionName: "getWarrant",
     args: [opts.principal, opts.agent],
   });
   return {
@@ -88,21 +88,21 @@ export async function readOnchainMandate(opts: {
   };
 }
 
-/** Score a swap against an on-chain mandate; a missing/revoked/expired mandate forces verdict=fail. */
-export function scoreAgainstOnchain(swap: ProposedSwap, onchain: OnchainMandate): Scorecard {
+/** Score a swap against an on-chain warrant; a missing/revoked/expired warrant forces verdict=fail. */
+export function scoreAgainstOnchain(swap: ProposedSwap, onchain: OnchainWarrant): Scorecard {
   const scorecard = scoreSwap(swap, onchain.spec);
   if (!onchain.active) {
     scorecard.verdict = "fail";
     scorecard.notes.unshift(
       onchain.version === 0
-        ? "No on-chain mandate from this principal to this agent: the agent is not authorised."
-        : `On-chain mandate v${onchain.version} is revoked or expired: the agent is not currently authorised.`,
+        ? "No on-chain warrant from this principal to this agent: the agent is not authorised."
+        : `On-chain warrant v${onchain.version} is revoked or expired: the agent is not currently authorised.`,
     );
   }
   return scorecard;
 }
 
-/** Verdict enum index in MandateRegistry (Pass=0, Warn=1, Fail=2). */
+/** Verdict enum index in WarrantRegistry (Pass=0, Warn=1, Fail=2). */
 export const VERDICT_INDEX: Record<Severity, number> = { pass: 0, warn: 1, fail: 2 };
 
 export const quoteHash = (quoteId: string): Hex => keccak256(stringToHex(quoteId));

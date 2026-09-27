@@ -7,7 +7,7 @@ import {
   schemaToFlags,
 } from "@metamask/agent-wallet/plugin";
 import {
-  type MandateSpec,
+  type WarrantSpec,
   normalizeImpact,
   percentToFraction,
   type ProposedSwap,
@@ -15,10 +15,10 @@ import {
   type Scorecard,
   scoreSwap,
 } from "../../lib/score.js";
-import { loadMandate } from "../../lib/spec.js";
+import { loadWarrant } from "../../lib/spec.js";
 import {
   quoteHash,
-  readOnchainMandate,
+  readOnchainWarrant,
   scoreAgainstOnchain,
   scorecardHash,
   VERDICT_INDEX,
@@ -34,50 +34,50 @@ const inputs = {
     prompt: false,
     index: 0,
   },
-  mandateFile: {
+  warrantFile: {
     type: InputFieldType.Text,
-    flag: "mandate-file",
-    message: "Path to a mandate.json overriding the default suitability limits",
+    flag: "warrant-file",
+    message: "Path to a warrant.json overriding the default suitability limits",
     required: false,
     prompt: false,
   },
   registry: {
     type: InputFieldType.Text,
     flag: "registry",
-    message: "MandateRegistry contract address — read the mandate on-chain instead of from mandate.json",
+    message: "WarrantRegistry contract address — read the warrant on-chain instead of from warrant.json",
     required: false,
     prompt: false,
   },
   principal: {
     type: InputFieldType.Text,
     flag: "principal",
-    message: "Address of the principal who granted the on-chain mandate (with --registry)",
+    message: "Address of the principal who granted the on-chain warrant (with --registry)",
     required: false,
     prompt: false,
   },
   agent: {
     type: InputFieldType.Text,
     flag: "agent",
-    message: "Agent address the mandate was granted to (default: the quote's wallet address)",
+    message: "Agent address the warrant was granted to (default: the quote's wallet address)",
     required: false,
     prompt: false,
   },
   rpcUrl: {
     type: InputFieldType.Text,
     flag: "rpc-url",
-    message: "RPC endpoint of the chain the MandateRegistry lives on (with --registry)",
+    message: "RPC endpoint of the chain the WarrantRegistry lives on (with --registry)",
     required: false,
     prompt: false,
   },
 } satisfies InputSchema;
 
-/** Everything the agent needs to call MandateRegistry.attestPreflight for this scorecard. */
+/** Everything the agent needs to call WarrantRegistry.attestPreflight for this scorecard. */
 type Attestation = {
   rpcUrl: string;
   registry: string;
   principal: string;
   agent: string;
-  mandateVersion: number;
+  warrantVersion: number;
   quoteHash: string;
   verdict: number;
   scorecardHash: string;
@@ -85,9 +85,9 @@ type Attestation = {
 
 type PreflightResult = {
   scorecard: Scorecard | null;
-  mandate: MandateSpec;
-  mandateSource: string;
-  /** Present when the mandate is on-chain: what the agent needs to call attestPreflight. */
+  warrant: WarrantSpec;
+  warrantSource: string;
+  /** Present when the warrant is on-chain: what the agent needs to call attestPreflight. */
   attestation?: Attestation;
   /** Explanation for soft states such as "no pending quote". */
   message?: string;
@@ -105,14 +105,14 @@ const normImpact = (v: unknown): number | undefined => {
   return n === undefined ? undefined : normalizeImpact(n);
 };
 
-export default class MandatePreflight extends PluginCommand<PreflightResult> {
+export default class WarrantPreflight extends PluginCommand<PreflightResult> {
   static override description =
-    "Preflight a pending swap quote against your mandate: reveal size, slippage, price impact, fees, recipient, cross-chain and approval risk before the agent executes. Reveals — never blocks or bypasses native Guard Mode.";
+    "Preflight a pending swap quote against your warrant: reveal size, slippage, price impact, fees, recipient, cross-chain and approval risk before the agent executes. Reveals — never blocks or bypasses native Guard Mode.";
 
   static override examples = [
-    "<%= config.bin %> mandate preflight",
-    "<%= config.bin %> mandate preflight <quote-id>",
-    "<%= config.bin %> mandate preflight --mandate-file ./mandate.json --json",
+    "<%= config.bin %> warrant preflight",
+    "<%= config.bin %> warrant preflight <quote-id>",
+    "<%= config.bin %> warrant preflight --warrant-file ./warrant.json --json",
   ];
 
   // Read-only reveal: needs a logged-in session to read stored quotes, never initialises the submit path.
@@ -123,11 +123,11 @@ export default class MandatePreflight extends PluginCommand<PreflightResult> {
   static override args = schemaToArgs(inputs);
 
   /** Must match package.json#mm.commands[].id. */
-  protected readonly pluginCommandId = "mandate:preflight";
+  protected readonly pluginCommandId = "warrant:preflight";
 
   async execute(io: CommandIO): Promise<PreflightResult> {
-    const { quoteId, mandateFile, registry, principal, agent, rpcUrl } = await io.resolveInputs(inputs);
-    const { spec, source } = loadMandate(process.cwd(), mandateFile || "mandate.json");
+    const { quoteId, warrantFile, registry, principal, agent, rpcUrl } = await io.resolveInputs(inputs);
+    const { spec, source } = loadWarrant(process.cwd(), warrantFile || "warrant.json");
 
     const store = this.ctx.swapQuoteStore;
 
@@ -138,10 +138,10 @@ export default class MandatePreflight extends PluginCommand<PreflightResult> {
       if (ids.length === 0) {
         return {
           scorecard: null,
-          mandate: spec,
-          mandateSource: source,
+          warrant: spec,
+          warrantSource: source,
           message:
-            "No pending swap quote. Run `mm swap quote ...` first, then `mm mandate preflight` to reveal its risk.",
+            "No pending swap quote. Run `mm swap quote ...` first, then `mm warrant preflight` to reveal its risk.",
         };
       }
       targetId = this.pickLatest(store, ids);
@@ -153,8 +153,8 @@ export default class MandatePreflight extends PluginCommand<PreflightResult> {
     } catch (e) {
       return {
         scorecard: null,
-        mandate: spec,
-        mandateSource: source,
+        warrant: spec,
+        warrantSource: source,
         message: `Cannot read quote ${targetId}: ${(e as Error).message}`,
       };
     }
@@ -163,22 +163,22 @@ export default class MandatePreflight extends PluginCommand<PreflightResult> {
 
     if (!registry?.trim()) {
       const scorecard = scoreSwap(swap, spec);
-      return { scorecard, mandate: spec, mandateSource: source };
+      return { scorecard, warrant: spec, warrantSource: source };
     }
 
-    // On-chain mandate: the limits the principal granted this agent in MandateRegistry.
+    // On-chain warrant: the limits the principal granted this agent in WarrantRegistry.
     const agentAddr = (agent?.trim() || swap.walletAddress) as Address | undefined;
     if (!principal?.trim() || !rpcUrl?.trim() || !agentAddr) {
       return {
         scorecard: null,
-        mandate: spec,
-        mandateSource: source,
+        warrant: spec,
+        warrantSource: source,
         message: "--registry requires --principal and --rpc-url (the agent defaults to the quote's wallet address; pass --agent if it is missing).",
       };
     }
-    let onchain: Awaited<ReturnType<typeof readOnchainMandate>>;
+    let onchain: Awaited<ReturnType<typeof readOnchainWarrant>>;
     try {
-      onchain = await readOnchainMandate({
+      onchain = await readOnchainWarrant({
         rpcUrl: rpcUrl.trim(),
         registry: registry.trim() as Address,
         principal: principal.trim() as Address,
@@ -187,24 +187,24 @@ export default class MandatePreflight extends PluginCommand<PreflightResult> {
     } catch (e) {
       return {
         scorecard: null,
-        mandate: spec,
-        mandateSource: source,
-        message: `Failed to read the on-chain mandate: ${(e as Error).message}`,
+        warrant: spec,
+        warrantSource: source,
+        message: `Failed to read the on-chain warrant: ${(e as Error).message}`,
       };
     }
 
     const scorecard = scoreAgainstOnchain(swap, onchain);
     return {
       scorecard,
-      mandate: onchain.spec,
-      mandateSource: `${onchain.source} v${onchain.version}${onchain.active ? "" : " (inactive)"}`,
+      warrant: onchain.spec,
+      warrantSource: `${onchain.source} v${onchain.version}${onchain.active ? "" : " (inactive)"}`,
       attestation: onchain.active
         ? {
             rpcUrl: rpcUrl.trim(),
             registry: registry.trim(),
             principal: principal.trim(),
             agent: agentAddr,
-            mandateVersion: onchain.version,
+            warrantVersion: onchain.version,
             quoteHash: quoteHash(targetId),
             verdict: VERDICT_INDEX[scorecard.verdict],
             scorecardHash: scorecardHash(scorecard),
@@ -299,9 +299,9 @@ export default class MandatePreflight extends PluginCommand<PreflightResult> {
 
   override successHint(data: PreflightResult): string {
     if (!data.scorecard) return data.message ?? "No result.";
-    const out = renderScorecard(data.scorecard, data.mandateSource);
+    const out = renderScorecard(data.scorecard, data.warrantSource);
     const a = data.attestation;
     if (!a) return out;
-    return `${out}\n\nAttest on-chain that this scorecard was shown before execution:\n  cast send ${a.registry} "attestPreflight(address,bytes32,uint32,uint8,bytes32)" ${a.principal} ${a.quoteHash} ${a.mandateVersion} ${a.verdict} ${a.scorecardHash} --rpc-url ${a.rpcUrl} --private-key $AGENT_PRIVATE_KEY   # signer must be agent ${a.agent}`;
+    return `${out}\n\nAttest on-chain that this scorecard was shown before execution:\n  cast send ${a.registry} "attestPreflight(address,bytes32,uint32,uint8,bytes32)" ${a.principal} ${a.quoteHash} ${a.warrantVersion} ${a.verdict} ${a.scorecardHash} --rpc-url ${a.rpcUrl} --private-key $AGENT_PRIVATE_KEY   # signer must be agent ${a.agent}`;
   }
 }

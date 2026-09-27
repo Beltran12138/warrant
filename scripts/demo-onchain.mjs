@@ -1,12 +1,12 @@
 /**
- * Live testnet walkthrough of the Mandate flow (used for the demo video):
- *   1. principal grants the agent a mandate on MandateRegistry
- *   2. preflight scores two synthetic swap quotes against the ON-CHAIN mandate
+ * Live testnet walkthrough of the Warrant flow (used for the demo video):
+ *   1. principal grants the agent a warrant on WarrantRegistry
+ *   2. preflight scores two synthetic swap quotes against the ON-CHAIN warrant
  *   3. the agent attests each scorecard on-chain (attestPreflight)
  *   4. principal revokes → preflight now reports the agent as unauthorised
  *
  * Quotes are the synthetic fixtures in test/fixtures.mjs: a live `mm swap quote` needs a funded
- * mainnet wallet, so the scoring input is fixed while every mandate read/write here is real.
+ * mainnet wallet, so the scoring input is fixed while every warrant read/write here is real.
  *
  * Usage:  npm run build && node scripts/demo-onchain.mjs <monad|fuji>
  * Needs contracts/.env with DEPLOYER_PRIVATE_KEY (principal) and AGENT_PRIVATE_KEY, both funded.
@@ -18,14 +18,14 @@ import { privateKeyToAccount } from "viem/accounts";
 import { renderScorecard } from "../dist/lib/score.js";
 import {
   quoteHash,
-  readOnchainMandate,
+  readOnchainWarrant,
   scoreAgainstOnchain,
   scorecardHash,
   VERDICT_INDEX,
 } from "../dist/lib/onchain.js";
 import { clean, risky } from "../test/fixtures.mjs";
 
-const REGISTRY = "0xf0145a8b57fb97d352f7a650b4c4ae4488951f48";
+const REGISTRY = "0x37cdFe2a144993dC3145367305fF66E29302E673";
 const CHAINS = {
   monad: {
     chain: defineChain({
@@ -50,7 +50,7 @@ const CHAINS = {
 const ABI = [
   {
     type: "function",
-    name: "setMandate",
+    name: "setWarrant",
     stateMutability: "nonpayable",
     inputs: [
       { name: "agent", type: "address" },
@@ -85,7 +85,7 @@ const ABI = [
     inputs: [
       { name: "principal", type: "address" },
       { name: "quoteHash", type: "bytes32" },
-      { name: "mandateVersion", type: "uint32" },
+      { name: "warrantVersion", type: "uint32" },
       { name: "verdict", type: "uint8" },
       { name: "scorecardHash", type: "bytes32" },
     ],
@@ -123,15 +123,15 @@ const send = async (c, functionName, args, label) => {
   console.log(`  ↳ ${label}: ${net.tx(hash)}`);
   return hash;
 };
-const read = () => readOnchainMandate({ rpcUrl, registry: REGISTRY, principal: P, agent: A });
+const read = () => readOnchainWarrant({ rpcUrl, registry: REGISTRY, principal: P, agent: A });
 
-console.log(`\n=== Mandate on ${net.chain.name} — registry ${REGISTRY} ===`);
+console.log(`\n=== Warrant on ${net.chain.name} — registry ${REGISTRY} ===`);
 console.log(`principal ${P}\nagent     ${A}\n`);
 
-console.log("1) Principal grants the agent a mandate: ≤$1,000/trade, ≤100bps slippage, ≤150bps impact, ≤50bps fees, self-custody only, 30-day expiry");
+console.log("1) Principal grants the agent a warrant: ≤$1,000/trade, ≤100bps slippage, ≤150bps impact, ≤50bps fees, self-custody only, 30-day expiry");
 await send(
   principal,
-  "setMandate",
+  "setWarrant",
   [
     A,
     {
@@ -145,7 +145,7 @@ await send(
       expiresAt: BigInt(Math.floor(Date.now() / 1000) + 30 * 86400),
     },
   ],
-  "setMandate",
+  "setWarrant",
 );
 
 const granted = await read();
@@ -167,7 +167,7 @@ for (const [label, swap] of [
   );
 }
 
-console.log("\n4) Principal revokes the mandate");
+console.log("\n4) Principal revokes the warrant");
 await send(principal, "revoke", [A], "revoke");
 const revoked = await read();
 const after = scoreAgainstOnchain(clean, revoked);

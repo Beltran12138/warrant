@@ -1,24 +1,24 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { DEFAULT_MANDATE, type MandateSpec } from "./score.js";
+import { DEFAULT_WARRANT, type WarrantSpec } from "./score.js";
 
-/** Read mandate fields from mandate.json in cwd; missing fields and a missing file fall back to defaults. */
-export function loadMandate(cwd = process.cwd(), file = "mandate.json"): {
-  spec: MandateSpec;
+/** Read warrant fields from warrant.json in cwd; missing fields and a missing file fall back to defaults. */
+export function loadWarrant(cwd = process.cwd(), file = "warrant.json"): {
+  spec: WarrantSpec;
   source: string;
 } {
   const path = resolve(cwd, file);
   try {
-    const raw = JSON.parse(readFileSync(path, "utf8")) as Partial<MandateSpec>;
-    return { spec: mergeMandate(raw), source: path };
+    const raw = JSON.parse(readFileSync(path, "utf8")) as Partial<WarrantSpec>;
+    return { spec: mergeWarrant(raw), source: path };
   } catch {
-    return { spec: { ...DEFAULT_MANDATE }, source: "(defaults)" };
+    return { spec: { ...DEFAULT_WARRANT }, source: "(defaults)" };
   }
 }
 
 /** Merge overrides onto the defaults with type/range checks; invalid values are ignored. */
-export function mergeMandate(over: Partial<MandateSpec>): MandateSpec {
-  const s: MandateSpec = { ...DEFAULT_MANDATE };
+export function mergeWarrant(over: Partial<WarrantSpec>): WarrantSpec {
+  const s: WarrantSpec = { ...DEFAULT_WARRANT };
   const num = (v: unknown) => (typeof v === "number" && Number.isFinite(v) && v >= 0 ? v : undefined);
   const bool = (v: unknown) => (typeof v === "boolean" ? v : undefined);
   s.maxUsdPerTrade = num(over.maxUsdPerTrade) ?? s.maxUsdPerTrade;

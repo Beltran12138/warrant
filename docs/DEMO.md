@@ -10,7 +10,7 @@ npm run build
 node test/demo.mjs          # sanity: two scorecards render
 ```
 
-The live script re-grants the mandate each run, so the version number goes up by one per take.
+The live script re-grants the warrant each run, so the version number goes up by one per take.
 
 ---
 
@@ -20,15 +20,15 @@ The live script re-grants the mandate each run, so the version number goes up by
 
 > When an AI agent trades for you, your limits usually live in a system prompt. A prompt is not
 > suitability: nobody can check it, nobody can revoke it, and after a bad trade nobody can prove
-> the agent was told. Mandate puts the limits on-chain and makes the agent's pre-trade disclosure
+> the agent was told. Warrant puts the limits on-chain and makes the agent's pre-trade disclosure
 > verifiable.
 
 ## 0:30–1:00 · Grant
 
 **Screen:** run `node scripts/demo-onchain.mjs monad` (or `fuji`); pause after step 1.
-Click the `setMandate` link → explorer shows the `MandateSet` event.
+Click the `setWarrant` link → explorer shows the `WarrantSet` event.
 
-> The principal grants this agent a mandate on-chain: at most $1,000 a trade, 1% slippage,
+> The principal grants this agent a warrant on-chain: at most $1,000 a trade, 1% slippage,
 > 1.5% price impact, 0.5% fees, funds must come back to the same wallet, expires in 30 days.
 > It is versioned and revocable.
 
@@ -36,7 +36,7 @@ Click the `setMandate` link → explorer shows the `MandateSet` event.
 
 **Screen:** step 2–3 output. Stay on the two scorecards.
 
-> Before trading, the agent runs preflight. It reads the mandate from chain, not from a file,
+> Before trading, the agent runs preflight. It reads the warrant from chain, not from a file,
 > and scores the quote on seven dimensions.
 >
 > A $250 same-chain swap: every line passes. The agent attests the PASS on-chain.
@@ -46,14 +46,14 @@ Click the `setMandate` link → explorer shows the `MandateSet` event.
 > execute, and it still attests the FAIL, so the refusal is on the record too.
 
 **Screen:** click one `attestPreflight` link → `PreflightAttested` event: principal, agent,
-quoteHash, mandate version, verdict, scorecardHash.
+quoteHash, warrant version, verdict, scorecardHash.
 
 ## 1:50–2:20 · Revoke
 
 **Screen:** step 4 output.
 
 > The principal revokes. The same clean $250 trade now comes back FAIL: the agent is no longer
-> authorised. The mandate version on-chain moved from 1 to 2, and any attestation against the old
+> authorised. The warrant version on-chain moved from 1 to 2, and any attestation against the old
 > version would revert.
 
 ## 2:20–2:45 · Chain integration and honesty
@@ -66,14 +66,14 @@ quoteHash, mandate version, verdict, scorecardHash.
 > *(Fuji take)* On Avalanche, finality is sub-second, so the attestation is final before the trade
 > would be, and on Fuji it costs effectively nothing.
 >
-> Mandate reveals, it does not enforce. A plugin can't intercept the wallet's native commands, so
+> Warrant reveals, it does not enforce. A plugin can't intercept the wallet's native commands, so
 > we don't pretend to. What we give you is proof.
 
 ## 2:45–3:00 · Close
 
 **Screen:** repo URL and contract address.
 
-> Mandate: suitability as an on-chain object, not a prompt. Contract, plugin, agent skill and
+> Warrant: suitability as an on-chain object, not a prompt. Contract, plugin, agent skill and
 > tests are open source.
 
 ---
