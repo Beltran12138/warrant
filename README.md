@@ -349,8 +349,15 @@ to the values written with `cast`, not to the plugin's own conversion code.
   `scripts/demo-onchain.mjs` signs with a separate agent EOA instead.
 - **Prices are off-chain inputs.** USD values come from the quote. An attestation proves what the
   agent was shown, not that the price data was correct.
-- **Synthetic quotes in the demo.** A live `mm swap quote` needs a funded mainnet wallet; the
-  demo scores two fixed fixtures (`test/fixtures.mjs`). Every warrant read and write is real.
+- **Scripted demos use synthetic quotes; the plugin has run on a real one.** `mm swap quote` works
+  with an empty wallet: on 2026-09-27 a real Monad mainnet quote (1 MON → USDC, quote
+  `0x13d2c3f1…e2f7`) went through the installed plugin, `mm warrant preflight --registry …
+  --attestor …`, scored against the on-chain warrant on Monad testnet: PASS (size $0.03, slippage
+  50 bps, price impact −2.39%, fees $0). mm's `priceImpact` is `(fromUsd − toUsd) / fromUsd`
+  (reproduced from that quote's own fields), so a negative value is in the trader's favour. The
+  scripted walkthroughs (`demo-onchain.mjs`, `demo-violations.mjs`) score the fixtures in
+  `test/fixtures.mjs` so they stay reproducible; every warrant read, write and attestation is real.
+  No real swap has been executed yet: the warrants live on testnets, the swaps on mainnet.
 - Testnet only. Not audited.
 
 ## Pre-existing work and build window
