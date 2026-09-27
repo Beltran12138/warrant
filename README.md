@@ -57,6 +57,7 @@ agent ──attestPreflight(quoteHash, version, verdict, scorecardHash)──▶
    or
 agent ──mm wallet sign-typed-data (EIP-712, off-chain)──▶ anyone ──submit──▶ WarrantAttestor
                                                           (checks signer + version) ──▶ SignedPreflightAttested
+                                    WarrantReputation ──giveFeedback──▶ ERC-8004 Reputation (agent's identity)
 ```
 
 | Layer | What | Where |
@@ -70,6 +71,8 @@ agent ──mm wallet sign-typed-data (EIP-712, off-chain)──▶ anyone ─�
 | Live walkthrough | grant → preflight → attest → revoke on a real testnet | `scripts/demo-onchain.mjs` |
 | Relayer | put an agent-signed attestation on-chain | `scripts/submit-signed.mjs` |
 | RPC shim | lets `mm wallet send-transaction` reach Monad testnet (see Limitations) | `scripts/mm-rpc-shim.mjs` |
+| Contract | `WarrantReputation`: each verified attestation becomes one ERC-8004 feedback entry on the agent's identity (see below) | `contracts/src/WarrantReputation.sol` |
+| ERC-8004 identity | mint the agent's identity and bind its `agentWallet` to the mm wallet | `scripts/register-agent.mjs` |
 
 **Tech stack:** Solidity 0.8.28 + Foundry 1.8.3 · TypeScript on Node 22+ · viem 2.56 ·
 MetaMask Agent Wallet plugin SDK (`@metamask/agent-wallet` 6.2.0, oclif) · Monad testnet ·
@@ -107,6 +110,40 @@ granted warrant v1 on both chains. Two ways to attest, both tested live:
 
 The signature path is what an unattended agent would use: it signs every scorecard for free and
 without waiting for a human, and the evidence becomes public once anyone relays it.
+
+### ERC-8004: the agent's identity and a reputation built from its attestations (2026-09-27)
+
+[ERC-8004](https://eips.ethereum.org/EIPS/eip-8004) (Draft) gives agents an on-chain identity
+(an ERC-721) and a reputation registry that any client can post feedback to. Its v2.0.0 registries
+are live at the same addresses on both testnets (Identity `0x8004A818…BD9e`, Reputation
+`0x8004B663…8713`). Warrant plugs into both:
+
+- **Identity.** The trading agent is an ERC-8004 identity whose `agentWallet` is the **mm wallet**.
+  The registry only changes `agentWallet` with that wallet's own EIP-712 signature; here it came
+  from `mm wallet sign-typed-data` (no transaction, no approval prompt), submitted by the agent's
+  operator (`scripts/register-agent.mjs`).
+- **Reputation.** `WarrantReputation` (`0x0FAf92b84f00201e888210B62ef5055Cc3BbefED`, both chains) is
+  the feedback client. `submitAndRate(attestation, signature, agentId)` accepts only an
+  attestation whose agent is that identity's `agentWallet`, records it in `WarrantAttestor` (or
+  finds it already recorded, so front-running the attestor cannot cost the agent its feedback), and
+  posts one entry: value 1, `tag1 = "warrant-preflight"`, `tag2` = the verdict, `feedbackHash` =
+  the attestation digest. Anyone can then ask the ERC-8004 registry itself:
+  `getSummary(agentId, [WarrantReputation], "warrant-preflight", "fail")` = how many trades this
+  agent disclosed as out of bounds before acting.
+
+| | Monad testnet | Avalanche Fuji |
+|---|---|---|
+| Agent identity (owner: operator `0xeb11…789E`) | agentId **1937**, [register](https://testnet.monadvision.com/tx/0xddad44a132a9ffda111eb70dde729988b34ef2b47aef039995f62068617595fd) | agentId **252**, [register](https://subnets-test.avax.network/c-chain/tx/0xa3dcae95e0dec5cc58500b84ab799f7ca88c6c0ebd8a01b94c93ea94d92d1312) |
+| `agentWallet` := mm server wallet, signed by mm | [0x6ce8…dca2](https://testnet.monadvision.com/tx/0x6ce8d51d01f05f274346ae52689e66db090bce70c2283d81a79296336c70dca2) | [0xcd02…cda5](https://subnets-test.avax.network/c-chain/tx/0xcd02b6f2f6082261c6b0deed8926dc43923f0fe7ca34953c242040ca46f5cda5) |
+| PASS attestation rated | [0xc89e…4879](https://testnet.monadvision.com/tx/0xc89ea9b85bf4ba48e1e36008eacb2fe8b16fe34ede2af44ac9811efa64564879) (already on-chain → rated only) | [0x3e46…27d2](https://subnets-test.avax.network/c-chain/tx/0x3e46aa6e77d17da9e3a24832a6579d727e0b0583660bc7a39c8aff9f3d2127d2) (already on-chain → rated only) |
+| FAIL attestation rated | [0x108c…7427](https://testnet.monadvision.com/tx/0x108cad1efff809ddc2c0faac1a805c2f0d182406eaae71f05dde28bb45b87427) (new: recorded + rated in one tx) | [0x5c7c…f5cf](https://subnets-test.avax.network/c-chain/tx/0x5c7cfc7f1bfad4f1a544524c362651a242bcc981600115f7d8eb0ab01ecff5cf) (already on-chain → rated only) |
+| `getSummary` read from the ERC-8004 registry | 2 entries: 1 `pass`, 1 `fail` | 2 entries: 1 `pass`, 1 `fail` |
+| `WarrantReputation` deploy | `0xd0b34514…3332` | `0x75ca407c…77cc` |
+
+What this reputation measures is **disclosure**, not trading skill: that the agent checked each
+trade against a principal's warrant and signed the result before acting. A principal is only an
+address, so a consumer should weigh entries by principal (the `SignedPreflightAttested` event
+names it); the count alone can be inflated by an agent that grants itself warrants.
 
 ### Live run (2026-09-26)
 
@@ -239,7 +276,7 @@ a threshold.
 ```bash
 npm test                              # scoring (9) + attestation builders (11) + on-chain integration on a local anvil (8)
 git clone --depth 1 https://github.com/foundry-rs/forge-std contracts/lib/forge-std   # once
-cd contracts && forge test            # WarrantRegistry (13) + WarrantAttestor (14)
+cd contracts && forge test            # WarrantRegistry (13) + WarrantAttestor (14) + WarrantReputation on a Fuji fork of the live ERC-8004 registries (5)
 ```
 
 The integration test deploys to a local anvil, writes a warrant with `cast`, reads it back through

@@ -32,7 +32,9 @@ prompt. Check every trade against them and leave a verifiable record that you di
    - Preferred, when preflight ran with `--attestor`: run `attestation.signed.command`
      (`mm wallet sign-typed-data`: an off-chain signature, no gas). Keep the typed data and the
      signature, and hand both to whoever relays (`scripts/submit-signed.mjs`). The attestation
-     counts once it is on-chain; do not execute a `fail` either way.
+     counts once it is on-chain; do not execute a `fail` either way. If you have an ERC-8004
+     identity whose `agentWallet` is this mm wallet, include its agentId so the relay also records
+     the attestation in your ERC-8004 reputation (`tag1 = "warrant-preflight"`, `tag2` = verdict).
    - Otherwise run `attestation.mm.command` (an `mm wallet send-transaction` call). If
      `attestation.mm.note` is set, follow it first (on Monad testnet: start
      `scripts/mm-rpc-shim.mjs` and set `MM_INFURA_RPC_BASE_URL`).
