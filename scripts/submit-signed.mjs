@@ -1,7 +1,11 @@
 /**
  * Relayer: put an agent-signed preflight attestation on-chain via WarrantAttestor.submit.
  *
- *   node scripts/submit-signed.mjs <typed-data.json> <signature>
+ *   node scripts/submit-signed.mjs <typed-data.json> <signature> [agentId]
+ *
+ * With an ERC-8004 agentId, it goes through WarrantReputation instead, which also records one
+ * reputation entry for the agent (the agentId's agentWallet must be the signing agent). If the
+ * attestation is already on-chain, that path still works and only adds the reputation entry.
  *
  * <typed-data.json> is `attestation.signed.typedData` from `mm warrant preflight --attestor … --json`;
  * <signature> is `data.signature` from `mm wallet sign-typed-data … --json`. The chain and the
@@ -14,15 +18,26 @@ import { createWalletClient, defineChain, http, publicActions, recoverTypedDataA
 import { privateKeyToAccount } from "viem/accounts";
 import { WARRANT_ATTESTOR_ABI } from "../dist/lib/onchain.js";
 
+const REPUTATION_BRIDGE = "0x0FAf92b84f00201e888210B62ef5055Cc3BbefED";
+const BRIDGE_ABI = [
+  {
+    type: "function",
+    name: "submitAndRate",
+    stateMutability: "nonpayable",
+    inputs: [WARRANT_ATTESTOR_ABI[0].inputs[0], { name: "signature", type: "bytes" }, { name: "agentId", type: "uint256" }],
+    outputs: [],
+  },
+];
+
 const RPC = { 10143: "https://testnet-rpc.monad.xyz", 43113: "https://api.avax-test.network/ext/bc/C/rpc" };
 const TX = {
   10143: (h) => `https://testnet.monadvision.com/tx/${h}`,
   43113: (h) => `https://subnets-test.avax.network/c-chain/tx/${h}`,
 };
 
-const [file, signature] = process.argv.slice(2);
+const [file, signature, agentId] = process.argv.slice(2);
 if (!file || !signature) {
-  console.error("usage: node scripts/submit-signed.mjs <typed-data.json> <signature>");
+  console.error("usage: node scripts/submit-signed.mjs <typed-data.json> <signature> [agentId]");
   process.exit(1);
 }
 const td = JSON.parse(readFileSync(file, "utf8"));
@@ -48,12 +63,10 @@ const chain = defineChain({ id: chainId, name: `chain ${chainId}`, nativeCurrenc
 const client = createWalletClient({ account: privateKeyToAccount(pk), chain, transport: http(rpcUrl) }).extend(publicActions);
 
 const m = td.message;
-const hash = await client.writeContract({
-  address: td.domain.verifyingContract,
-  abi: WARRANT_ATTESTOR_ABI,
-  functionName: "submit",
-  args: [{ ...m, warrantVersion: Number(m.warrantVersion), verdict: Number(m.verdict) }, signature],
-});
+const a = { ...m, warrantVersion: Number(m.warrantVersion), verdict: Number(m.verdict) };
+const hash = agentId
+  ? await client.writeContract({ address: REPUTATION_BRIDGE, abi: BRIDGE_ABI, functionName: "submitAndRate", args: [a, signature, BigInt(agentId)] })
+  : await client.writeContract({ address: td.domain.verifyingContract, abi: WARRANT_ATTESTOR_ABI, functionName: "submit", args: [a, signature] });
 const r = await client.waitForTransactionReceipt({ hash });
-console.log(`${r.status}: agent ${m.agent} attestation relayed by ${client.account.address}\n  ${TX[chainId]?.(hash) ?? hash}`);
+console.log(`${r.status}: agent ${m.agent} attestation relayed by ${client.account.address}${agentId ? ` and rated on ERC-8004 agent ${agentId}` : ""}\n  ${TX[chainId]?.(hash) ?? hash}`);
 if (r.status !== "success") process.exit(1);
