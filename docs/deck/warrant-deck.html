@@ -1,0 +1,360 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Warrant — pitch</title>
+<style>
+  @page { size: 1920px 1080px; margin: 0; }
+  :root {
+    --paper: #F6F4EF;
+    --ink: #141414;
+    --gray: #6E6A63;
+    --rule: #D8D3C8;
+    --pass: #2E6A3B;
+    --warn: #9A6400;
+    --fail: #A1281F;
+    --en: 'Times New Roman', Times, serif;
+    --cn: 'FangSong', '仿宋', 'STFangsong', '华文仿宋', serif;
+    --mono: Consolas, 'JetBrains Mono', 'Courier New', monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { background: var(--paper); color: var(--ink); }
+  body { font-family: var(--en); -webkit-font-smoothing: antialiased; }
+  .slide {
+    width: 1920px; height: 1080px; position: relative; overflow: hidden;
+    padding: 96px 120px 0 120px; page-break-after: always; background: var(--paper);
+  }
+  .rail {
+    position: absolute; top: 44px; left: 120px; right: 120px;
+    display: flex; justify-content: space-between; align-items: baseline;
+    font: 22px var(--en); color: var(--gray); letter-spacing: 0.04em;
+    border-bottom: 1px solid var(--rule); padding-bottom: 14px;
+  }
+  .rail b { color: var(--ink); font-weight: 700; letter-spacing: 0.12em; }
+  .rail .pg { font-family: var(--mono); font-size: 20px; }
+  .source {
+    position: absolute; left: 120px; right: 120px; bottom: 44px;
+    font: italic 19px var(--en); color: var(--gray);
+    border-top: 1px solid var(--rule); padding-top: 12px;
+  }
+  .source .cn { font-style: normal; font-family: var(--cn); }
+  h1 { font: 700 68px/1.08 var(--en); letter-spacing: -0.01em; margin-top: 40px; }
+  h1 + .cn-title { font: 40px/1.3 var(--cn); color: var(--ink); margin-top: 14px; }
+  .cn { font-family: var(--cn); }
+  .muted { color: var(--gray); }
+  .mono { font-family: var(--mono); }
+  .num { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+
+  /* ---------- 1 cover ---------- */
+  .cover { padding-top: 0; display: flex; flex-direction: column; justify-content: center; }
+  .cover .word { font: 700 220px/0.9 var(--en); letter-spacing: -0.03em; }
+  .cover .hook { font: italic 64px/1.15 var(--en); margin-top: 56px; }
+  .cover .hook-cn { font: 46px/1.3 var(--cn); margin-top: 18px; }
+  .cover .what { font: 34px/1.45 var(--en); color: var(--gray); margin-top: 56px; max-width: 1400px; }
+  .cover .what-cn { font: 32px/1.5 var(--cn); color: var(--gray); margin-top: 10px; max-width: 1400px; }
+  .cover .meta { position: absolute; left: 120px; right: 120px; bottom: 64px; display: flex; justify-content: space-between;
+    font: 24px var(--en); color: var(--gray); border-top: 1px solid var(--rule); padding-top: 18px; }
+  .cover .meta .mono { font-size: 22px; color: var(--ink); }
+
+  /* ---------- 2 problem ---------- */
+  .two { display: grid; grid-template-columns: 1.35fr 1fr; align-items: start; gap: 72px; margin-top: 56px; }
+  .prompt {
+    background: #EDEAE2; border-left: 6px solid var(--ink); padding: 40px 44px;
+    font: 30px/1.55 var(--mono); color: #3A3833;
+  }
+  .prompt .tag { font: 20px var(--en); letter-spacing: 0.14em; color: var(--gray); text-transform: uppercase; margin-bottom: 18px; }
+  .fails { list-style: none; }
+  .fails li { padding: 26px 0; border-bottom: 1px solid var(--rule); }
+  .fails li:first-child { padding-top: 6px; }
+  .fails .en { font: 700 38px/1.2 var(--en); }
+  .fails .zh { font: 30px/1.35 var(--cn); color: var(--gray); margin-top: 8px; }
+
+  /* ---------- 3 gap ---------- */
+  .gap { display: grid; grid-template-columns: 0.56fr 1fr; gap: 80px; margin-top: 64px; align-items: start; }
+  .hero { font: 700 240px/0.9 var(--mono); letter-spacing: -0.04em; }
+  .hero small { font-size: 110px; color: var(--gray); }
+  .hero-cap { font: 34px/1.35 var(--en); margin-top: 28px; }
+  .hero-cap-cn { font: 30px/1.4 var(--cn); color: var(--gray); margin-top: 10px; }
+  table.m { width: 100%; border-collapse: collapse; font-size: 30px; }
+  table.m th { font: 22px var(--en); letter-spacing: 0.1em; text-transform: uppercase; color: var(--gray);
+    text-align: left; padding: 0 0 14px; border-bottom: 2px solid var(--ink); }
+  table.m td { padding: 17px 0; border-bottom: 1px solid var(--rule); vertical-align: baseline; }
+  table.m td.dim { font-family: var(--en); }
+  table.m td.dim .cn { font-size: 24px; color: var(--gray); margin-left: 12px; }
+  table.m td.gm { color: var(--gray); font-size: 26px; }
+  table.m td.w { font: 700 30px var(--en); }
+  table.m tr.only td.w { color: var(--pass); }
+  table.m tr.only td.dim { font-weight: 700; }
+
+  /* ---------- 4 flow ---------- */
+  .flow { margin-top: 40px; }
+  .steps { display: grid; grid-template-columns: repeat(4, 1fr); gap: 40px; margin-top: 24px; }
+  .step .n { font: 700 30px var(--mono); color: var(--gray); }
+  .step .en { font: 700 32px/1.2 var(--en); margin-top: 8px; }
+  .step .zh { font: 26px/1.4 var(--cn); color: var(--gray); margin-top: 8px; }
+  .step .code { font: 22px var(--mono); margin-top: 12px; color: #3A3833; }
+
+  /* ---------- 5 scorecards ---------- */
+  .cards { display: grid; grid-template-columns: 0.62fr 1fr; align-items: start; gap: 40px; margin-top: 44px; }
+  .term { background: #1A1A18; color: #E9E6DE; padding: 28px 32px; font: 22px/1.55 var(--mono); min-height: 500px; }
+  .term > div { white-space: pre; }
+  .term .t { color: #9C978C; margin-bottom: 10px; }
+  .term .ok { color: #7FBF8A; } .term .bad { color: #E07A6F; } .term .wn { color: #E0B25A; }
+  .term .v { font-weight: 700; }
+  .callout { position: absolute; right: 120px; top: 112px; text-align: right; }
+  .callout .big { font: 700 108px/1 var(--mono); color: var(--fail); }
+  .callout .lbl { font: 26px var(--en); color: var(--gray); margin-top: 6px; }
+  .callout .lbl .cn { margin-left: 10px; }
+
+  /* ---------- 6 proof ---------- */
+  .proof { display: grid; grid-template-columns: 0.43fr 1fr; gap: 72px; margin-top: 56px; }
+  table.tx { width: 100%; border-collapse: collapse; font-size: 26px; }
+  table.tx th { font: 21px var(--en); letter-spacing: 0.1em; text-transform: uppercase; color: var(--gray);
+    text-align: left; padding: 0 0 12px; border-bottom: 2px solid var(--ink); }
+  table.tx th.r, table.tx td.r { text-align: right; }
+  table.tx td { padding: 16px 0; border-bottom: 1px solid var(--rule); }
+  table.tx td.h { font-family: var(--mono); font-size: 24px; }
+  .bars { margin-top: 48px; }
+  .bars .row { display: grid; grid-template-columns: 230px 1fr 360px; align-items: center; gap: 20px; margin-top: 16px; font-size: 26px; }
+  .bars .bar { height: 30px; background: var(--ink); }
+  .bars .val { font-family: var(--mono); font-size: 24px; text-align: right; }
+  .bars .ttl { font: 22px var(--en); letter-spacing: 0.1em; text-transform: uppercase; color: var(--gray); }
+
+  /* ---------- 7 stance ---------- */
+  .stance .quote { font: italic 96px/1.05 var(--en); margin-top: 72px; }
+  .stance .quote-cn { font: 52px/1.3 var(--cn); margin-top: 22px; }
+  .limits { display: grid; grid-template-columns: 1fr 1fr; gap: 0 80px; margin-top: 72px; }
+  .limits > div { padding: 22px 0; border-top: 1px solid var(--rule); }
+  .limits .en { font: 700 30px/1.25 var(--en); }
+  .limits .zh { font: 26px/1.4 var(--cn); color: var(--gray); margin-top: 6px; }
+
+  /* ---------- 8 roadmap ---------- */
+  .road { margin-top: 56px; display: grid; grid-template-columns: 1.78fr 1fr; gap: 80px; }
+  .tl { position: relative; padding-left: 40px; border-left: 3px solid var(--ink); }
+  .tl .item { position: relative; padding: 0 0 38px; }
+  .tl .item::before { content: ''; position: absolute; left: -52px; top: 10px; width: 21px; height: 21px; background: var(--paper); border: 3px solid var(--ink); border-radius: 50%; }
+  .tl .item.done::before { background: var(--ink); }
+  .tl .d { font: 22px var(--mono); color: var(--gray); }
+  .tl .en { font: 700 32px/1.25 var(--en); margin-top: 4px; }
+  .tl .zh { font: 26px/1.4 var(--cn); color: var(--gray); margin-top: 4px; }
+  .ask .h { font: 22px var(--en); letter-spacing: 0.12em; text-transform: uppercase; color: var(--gray); }
+  .ask .url { font: 700 38px/1.25 var(--en); margin-top: 14px; word-break: break-all; }
+  .ask .p { font: 28px/1.45 var(--en); margin-top: 40px; }
+  .ask .p-cn { font: 26px/1.5 var(--cn); color: var(--gray); margin-top: 8px; }
+</style>
+</head>
+<body>
+
+<!-- 1 · Cover -->
+<section class="slide cover">
+  <div class="word">Warrant</div>
+  <div class="hook">A prompt is not suitability.</div>
+  <div class="hook-cn">提示词，不等于适当性。</div>
+  <div class="what">On-chain, revocable trade limits for AI agents, a preflight that scores every trade against them, and proof the agent was told before it traded.</div>
+  <div class="what-cn">给 AI 交易代理的链上可撤销授权：每笔交易前按授权打分，并在链上留下「它事先被告知过」的证据。</div>
+  <div class="meta">
+    <span>github.com/Beltran12138/warrant</span>
+    <span>Monad testnet · Avalanche Fuji · <span class="mono">0x37cd…E673</span></span>
+    <span>Monad Metropolis · Avalanche Buildathon · 2026</span>
+  </div>
+</section>
+
+<!-- 2 · Problem -->
+<section class="slide">
+  <div class="rail"><b>WARRANT</b><span>The problem · 问题</span><span class="pg">02 / 08</span></div>
+  <h1>Today, an agent's trading limits live in a prompt.</h1>
+  <div class="cn-title">今天，AI 代理的交易边界写在一段提示词里。</div>
+  <div class="two">
+    <div class="prompt">
+      <div class="tag">A typical system prompt · 典型提示词</div>
+      You are a trading agent.<br>
+      Never trade more than $1,000.<br>
+      Keep slippage under 1%.<br>
+      Only send funds back to my wallet.<br>
+      Ask me before anything risky.
+    </div>
+    <ul class="fails">
+      <li><div class="en">Nobody can check it.</div><div class="zh">外人无法核查代理被授权做什么。</div></li>
+      <li><div class="en">Nobody can revoke it on its own.</div><div class="zh">不改代理本身，就无法单独撤销授权。</div></li>
+      <li><div class="en">After a bad trade, nobody can prove the agent was told.</div><div class="zh">出事之后，无法证明代理事先被告知过风险。</div></li>
+    </ul>
+  </div>
+  <div class="source">Illustrative prompt. <span class="cn">示意提示词，非真实用户数据。</span></div>
+</section>
+
+<!-- 3 · Guard Mode gap -->
+<section class="slide">
+  <div class="rail"><b>WARRANT</b><span>Why the wallet's own policy is not enough · 钱包自带策略的缺口</span><span class="pg">03 / 08</span></div>
+  <h1>The wallet already limits spend. Nothing limits suitability.</h1>
+  <div class="cn-title">钱包管得住「花多少」，管不住「该不该这样成交」。</div>
+  <div class="gap">
+    <div>
+      <div class="hero">4<small> / 7</small></div>
+      <div class="hero-cap">suitability checks that MetaMask Agent Wallet's Guard Mode policy cannot express at all.</div>
+      <div class="hero-cap-cn">七项适当性检查中，有四项是 Guard Mode 策略完全无法表达的。</div>
+    </div>
+    <table class="m">
+      <tr><th>Check</th><th>Guard Mode policy</th><th>Warrant</th></tr>
+      <tr><td class="dim">Trade size<span class="cn">单笔金额</span></td><td class="gm">24h outflow total</td><td class="w">per trade</td></tr>
+      <tr class="only"><td class="dim">Slippage<span class="cn">滑点</span></td><td class="gm">—</td><td class="w">✓</td></tr>
+      <tr class="only"><td class="dim">Price impact<span class="cn">价格冲击</span></td><td class="gm">—</td><td class="w">✓</td></tr>
+      <tr class="only"><td class="dim">Fee load<span class="cn">费用占比</span></td><td class="gm">—</td><td class="w">✓</td></tr>
+      <tr><td class="dim">Recipient is self<span class="cn">收款回本钱包</span></td><td class="gm">address allowlist</td><td class="w">✓</td></tr>
+      <tr><td class="dim">Cross-chain<span class="cn">跨链</span></td><td class="gm">allowed chains</td><td class="w">✓</td></tr>
+      <tr class="only"><td class="dim">New token approval<span class="cn">新增授权</span></td><td class="gm">—</td><td class="w">✓</td></tr>
+    </table>
+  </div>
+  <div class="source">Source: <span class="mono">mm wallet policy template</span>, @metamask/agent-wallet 6.2.0 — policy fields are address allow/block lists, allowed chains, rolling 24h USD outflow. Read 2026-09-14.</div>
+</section>
+
+<!-- 4 · How it works -->
+<section class="slide">
+  <div class="rail"><b>WARRANT</b><span>How it works · 工作方式</span><span class="pg">04 / 08</span></div>
+  <h1>Limits on-chain. Scoring before the trade. A receipt after.</h1>
+  <div class="cn-title">授权放上链，交易前打分，事后留凭证。</div>
+  <svg class="flow" width="1680" height="330" viewBox="0 0 1680 330" font-family="Times New Roman, serif">
+    <defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="10" markerHeight="10" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#141414"/></marker></defs>
+    <!-- nodes -->
+    <rect x="0" y="40" width="300" height="110" fill="none" stroke="#141414" stroke-width="2.5"/>
+    <text x="150" y="92" text-anchor="middle" font-size="32" font-weight="700">Principal</text>
+    <text x="150" y="128" text-anchor="middle" font-size="24" fill="#6E6A63" font-family="FangSong, serif">授权人</text>
+
+    <rect x="560" y="40" width="560" height="110" fill="#141414"/>
+    <text x="840" y="92" text-anchor="middle" font-size="32" font-weight="700" fill="#F6F4EF">WarrantRegistry</text>
+    <text x="840" y="128" text-anchor="middle" font-size="22" fill="#CFCAC0" font-family="Consolas, monospace">versioned · revocable · expiring</text>
+
+    <rect x="1380" y="40" width="300" height="110" fill="none" stroke="#141414" stroke-width="2.5"/>
+    <text x="1530" y="92" text-anchor="middle" font-size="32" font-weight="700">Anyone</text>
+    <text x="1530" y="128" text-anchor="middle" font-size="24" fill="#6E6A63" font-family="FangSong, serif">任何审查者</text>
+
+    <rect x="0" y="220" width="300" height="100" fill="none" stroke="#141414" stroke-width="2.5"/>
+    <text x="150" y="266" text-anchor="middle" font-size="30" font-weight="700">AI agent</text>
+    <text x="150" y="300" text-anchor="middle" font-size="22" fill="#6E6A63" font-family="Consolas, monospace">mm swap quote</text>
+
+    <rect x="560" y="220" width="560" height="100" fill="none" stroke="#141414" stroke-width="2.5"/>
+    <text x="840" y="266" text-anchor="middle" font-size="30" font-weight="700">mm warrant preflight</text>
+    <text x="840" y="300" text-anchor="middle" font-size="22" fill="#6E6A63" font-family="Consolas, monospace">7 checks → pass / warn / fail</text>
+    <!-- edges -->
+    <line x1="300" y1="95" x2="552" y2="95" stroke="#141414" stroke-width="2.5" marker-end="url(#a)"/>
+    <text x="426" y="80" text-anchor="middle" font-size="22" font-family="Consolas, monospace">setWarrant</text>
+    <line x1="300" y1="270" x2="552" y2="270" stroke="#141414" stroke-width="2.5" marker-end="url(#a)"/>
+    <line x1="840" y1="158" x2="840" y2="212" stroke="#141414" stroke-width="2.5" marker-end="url(#a)"/>
+    <text x="866" y="194" font-size="22" font-family="Consolas, monospace">getWarrant</text>
+    <path d="M1120,270 L1250,270 L1250,125 L1128,125" fill="none" stroke="#141414" stroke-width="2.5" marker-end="url(#a)"/>
+    <text x="1262" y="206" font-size="22" font-family="Consolas, monospace">attestPreflight</text>
+    <line x1="1120" y1="80" x2="1372" y2="80" stroke="#141414" stroke-width="2.5" stroke-dasharray="8 6" marker-end="url(#a)"/>
+    <text x="1250" y="64" text-anchor="middle" font-size="22" font-family="Consolas, monospace">public events</text>
+  </svg>
+  <div class="steps">
+    <div class="step"><div class="n">01</div><div class="en">Grant</div><div class="zh">授权人为代理设定边界，可随时撤销。</div><div class="code">setWarrant / revoke</div></div>
+    <div class="step"><div class="n">02</div><div class="en">Preflight</div><div class="zh">代理下单前，按链上授权给报价打分。</div><div class="code">mm warrant preflight</div></div>
+    <div class="step"><div class="n">03</div><div class="en">Attest</div><div class="zh">把打分结论的哈希写上链，绑定当前授权版本。</div><div class="code">attestPreflight</div></div>
+    <div class="step"><div class="n">04</div><div class="en">Verify</div><div class="zh">任何人都能核对：授权了什么、代理被告知了什么。</div><div class="code">PreflightAttested</div></div>
+  </div>
+  <div class="source">Source: <span class="mono">contracts/src/WarrantRegistry.sol</span>, <span class="mono">src/commands/warrant/preflight.ts</span> — github.com/Beltran12138/warrant.</div>
+</section>
+
+<!-- 5 · Scorecards -->
+<section class="slide">
+  <div class="rail"><b>WARRANT</b><span>What the agent sees · 代理看到的打分</span><span class="pg">05 / 08</span></div>
+  <h1>Same warrant, two quotes.</h1>
+  <div class="cn-title">同一份授权，两笔报价。</div>
+  <div class="callout"><div class="big">$120.3</div><div class="lbl">worst-case loss on the second quote<span class="cn">第二笔的最坏损失</span></div></div>
+  <div class="cards">
+    <div class="term">
+      <div class="t">$ mm warrant preflight  # quote A</div>
+      <div class="v ok">SUITABLE</div><br>
+      <div><span class="ok">✓</span> size        $250</div>
+      <div><span class="ok">✓</span> slippage    0.50%</div>
+      <div><span class="ok">✓</span> impact      0.21%</div>
+      <div><span class="ok">✓</span> fees        14bps</div>
+      <div><span class="ok">✓</span> recipient   self</div>
+      <div><span class="ok">✓</span> chain       same</div>
+      <div><span class="ok">✓</span> approval    none</div><br>
+      <div class="t">worst case ≈ $1.25</div>
+    </div>
+    <div class="term">
+      <div class="t">$ mm warrant preflight  # quote B</div>
+      <div class="v bad">UNSUITABLE</div><br>
+      <div><span class="bad">✗</span> size        $4,200     limit $1,000</div>
+      <div><span class="bad">✗</span> slippage    3.00%      limit 1.00%</div>
+      <div><span class="bad">✗</span> impact      2.80%      limit 1.50%</div>
+      <div><span class="bad">✗</span> fees        79bps      limit 50bps</div>
+      <div><span class="bad">✗</span> recipient   0xBEEF…C0DE  self only</div>
+      <div><span class="wn">▲</span> chain       1 → 42161  bridge risk</div>
+      <div><span class="wn">▲</span> approval    required</div><br>
+      <div class="t">worst case ≈ $120.3 (3.00%) · may prompt Guard Mode 2FA</div>
+    </div>
+  </div>
+  <div class="source">Source: output of <span class="mono">test/demo.mjs</span> on the synthetic quotes in <span class="mono">test/fixtures.mjs</span>, scored against the default warrant ($1,000 · 100 · 150 · 50 bps). <span class="cn">报价为合成数据。</span></div>
+</section>
+
+<!-- 6 · Proof -->
+<section class="slide">
+  <div class="rail"><b>WARRANT</b><span>Live on two chains · 两条链实跑</span><span class="pg">06 / 08</span></div>
+  <h1>Deployed and exercised on Monad and Avalanche.</h1>
+  <div class="cn-title">已在 Monad 与 Avalanche 测试网部署并完整跑通。</div>
+  <div class="proof">
+    <div>
+      <div class="hero">8<small> / 8</small></div>
+      <div class="hero-cap">live transactions succeeded, one event each: grant, attest PASS, attest FAIL, revoke — on both chains.</div>
+      <div class="hero-cap-cn">两条链各四笔：授权、记录通过、记录不通过、撤销，全部成功。</div>
+    </div>
+    <div>
+      <table class="tx">
+        <tr><th>Step</th><th>Monad testnet</th><th>Avalanche Fuji</th></tr>
+        <tr><td>setWarrant</td><td class="h">0xf864…fbf8</td><td class="h">0x50a8…df54</td></tr>
+        <tr><td>attestPreflight · PASS</td><td class="h">0x5fc8…9d5e</td><td class="h">0xc719…cbca</td></tr>
+        <tr><td>attestPreflight · FAIL</td><td class="h">0x18d4…9a0e</td><td class="h">0x27a2…bfc9</td></tr>
+        <tr><td>revoke</td><td class="h">0xc7db…5921</td><td class="h">0x90e7…4400</td></tr>
+      </table>
+      <div class="bars">
+        <div class="ttl">Gas per attestPreflight · 每次记录的 gas</div>
+        <div class="row"><span>Monad testnet</span><div class="bar" style="width:100%"></div><span class="val">35,130 · 0.0036 MON</span></div>
+        <div class="row"><span>Avalanche Fuji</span><div class="bar" style="width:87.6%"></div><span class="val">30,788 · ≈0 AVAX</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="source">Source: transaction receipts via RPC, 2026-09-26. Registry <span class="mono">0x37cdFe2a144993dC3145367305fF66E29302E673</span> (same address on both chains). Gas prices at run time: 102 gwei (Monad), 160 wei (Fuji).</div>
+</section>
+
+<!-- 7 · Stance -->
+<section class="slide stance">
+  <div class="rail"><b>WARRANT</b><span>Design stance · 设计立场</span><span class="pg">07 / 08</span></div>
+  <div class="quote">Reveal, not enforce.</div>
+  <div class="quote-cn">只揭示，不拦截。</div>
+  <div class="limits">
+    <div><div class="en">A wallet plugin cannot intercept native commands.</div><div class="zh">插件拦不住钱包的原生命令，所以我们不假装能拦。</div></div>
+    <div><div class="en">So skipping preflight is made detectable, not impossible.</div><div class="zh">代理可以跳过打分，但跳过会在链上留下缺口。</div></div>
+    <div><div class="en">An attestation proves what the agent was shown, not that prices were right.</div><div class="zh">链上凭证证明「代理看到了什么」，不证明报价本身正确。</div></div>
+    <div><div class="en">Complements Guard Mode: it enforces spend, Warrant reveals suitability.</div><div class="zh">与 Guard Mode 互补：它管花钱上限，Warrant 管成交是否合适。</div></div>
+  </div>
+  <div class="source">Testnet only, not audited. Demo quotes are synthetic; every warrant read and write is real. <span class="cn">仅测试网，未经审计。</span></div>
+</section>
+
+<!-- 8 · Roadmap -->
+<section class="slide">
+  <div class="rail"><b>WARRANT</b><span>Next 17 days · 接下来</span><span class="pg">08 / 08</span></div>
+  <h1>From a receipt to a reputation.</h1>
+  <div class="cn-title">从一张凭证，到一份可追溯的信誉。</div>
+  <div class="road">
+    <div class="tl">
+      <div class="item done"><div class="d">2026-09-26 · shipped</div><div class="en">Registry on Monad + Fuji, plugin, agent skill, 30 tests</div><div class="zh">两链部署、插件、代理指令、30 项测试</div></div>
+      <div class="item"><div class="d">next</div><div class="en">Agent signs its own attestations (MetaMask BYOK wallet)</div><div class="zh">代理用自己持有的密钥签署凭证</div></div>
+      <div class="item"><div class="d">next</div><div class="en">ERC-8004 identity + reputation for agents</div><div class="zh">接入 ERC-8004：代理身份与信誉，两条测试网已有官方注册表</div></div>
+      <div class="item"><div class="d">by 2026-10-13</div><div class="en">Violation detector: trades with no attestation, or FAIL then trade</div><div class="zh">违规检测：没打分就成交，或判定不通过仍成交</div></div>
+    </div>
+    <div class="ask">
+      <div class="h">Try it · 试用</div>
+      <div class="url">github.com/Beltran12138/warrant</div>
+      <div class="p">One contract, one CLI command, one live walkthrough on either chain.</div>
+      <div class="p-cn">一个合约、一条命令，任选一条链即可完整跑通。</div>
+      <div class="p">Built solo with AI coding tools, disclosed in the README.</div>
+      <div class="p-cn">独立开发，使用 AI 编程工具，已在 README 中披露。</div>
+    </div>
+  </div>
+  <div class="source">ERC-8004 registries <span class="mono">0x8004A818…BD9e</span> / <span class="mono">0x8004B663…8713</span> have code on Monad testnet and Fuji (checked 2026-09-26). Roadmap items are plans, not shipped.</div>
+</section>
+
+</body>
+</html>
