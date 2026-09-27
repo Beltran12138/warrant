@@ -73,6 +73,7 @@ agent ──mm wallet sign-typed-data (EIP-712, off-chain)──▶ anyone ─�
 | RPC shim | lets `mm wallet send-transaction` reach Monad testnet (see Limitations) | `scripts/mm-rpc-shim.mjs` |
 | Contract | `WarrantReputation`: each verified attestation becomes one ERC-8004 feedback entry on the agent's identity (see below) | `contracts/src/WarrantReputation.sol` |
 | ERC-8004 identity | mint the agent's identity and bind its `agentWallet` to the mm wallet | `scripts/register-agent.mjs` |
+| Audit | violation detector: trades without an active warrant, without a disclosure, or after disclosing FAIL | `src/lib/audit.ts`, `scripts/audit.mjs` |
 
 **Tech stack:** Solidity 0.8.28 + Foundry 1.8.3 · TypeScript on Node 22+ · viem 2.56 ·
 MetaMask Agent Wallet plugin SDK (`@metamask/agent-wallet` 6.2.0, oclif) · Monad testnet ·
@@ -144,6 +145,53 @@ What this reputation measures is **disclosure**, not trading skill: that the age
 trade against a principal's warrant and signed the result before acting. A principal is only an
 address, so a consumer should weigh entries by principal (the `SignedPreflightAttested` event
 names it); the count alone can be inflated by an agent that grants itself warrants.
+
+### Audit: finding the agents that did not follow their warrant (2026-09-27)
+
+Disclosure only matters if someone checks it against what the agent actually did.
+`scripts/audit.mjs` reads a principal → agent pair from chain and classifies every transaction the
+agent sent in a block range:
+
+| Verdict | Meaning |
+|---|---|
+| `ok` | an active warrant, and the latest disclosure before the trade was PASS |
+| `NO_ACTIVE_WARRANT` | traded while the warrant was never granted, revoked or expired |
+| `UNATTESTED` | traded with no unused disclosure before it (one disclosure covers one trade) |
+| `EXECUTED_AFTER_FAIL` | the latest disclosure before the trade said FAIL |
+| `EXECUTED_ON_WARN` | review, not a violation: WARN needs a human yes, which is not visible on-chain |
+
+Everything comes from the chain: warrant events and disclosures from logs, the warrant's state
+before the range from `getWarrant` at the previous block, and the agent's transactions from the
+blocks themselves. The agent's **nonce delta** over the range is the denominator, so the report
+says how many of its outgoing transactions it examined; an empty result never claims more than that.
+Transactions to Warrant or ERC-8004 contracts are bookkeeping, not trades. Exit code 2 on violations.
+
+`scripts/demo-violations.mjs` stages one of each outcome with the testnet agent key (the "trades"
+are 1e-6 native-token transfers to `0x…dEaD`, standing in for swaps; the audit does not depend on
+what a trade is). The audit then found them without seeing the script's labels:
+
+| Staged step | Fuji | Monad testnet | Audit verdict |
+|---|---|---|---|
+| grant warrant | [0x8b53…3b50](https://subnets-test.avax.network/c-chain/tx/0x8b53411d4d71cdde27cacdd429d6f77441ab77a9931dafcbb15713b175733b50) | [0x3da5…dfdd](https://testnet.monadvision.com/tx/0x3da5c34ce91c19dd466d7061bf5db911ce63a3bcd5d57b032fa6c33773f2dfdd) | |
+| disclose PASS | [0x6ed9…a1fe](https://subnets-test.avax.network/c-chain/tx/0x6ed9910c0593e62ba89f23caf670d2210d7f3445f473e4f3bd8f02e38784a1fe) | [0x89e8…50a4](https://testnet.monadvision.com/tx/0x89e8556f77712fb6c763930252e65f7104c29cd3168aecc401fe281857e950a4) | bookkeeping |
+| trade 1 | [0x91ac…ed7e](https://subnets-test.avax.network/c-chain/tx/0x91acb4cd567d1aa69bf27dc8a3982e717a6f9ee1a0721afe22edd49936e9ed7e) | [0x5de3…6a87](https://testnet.monadvision.com/tx/0x5de3c19e3d31bef435020a0e6922d5d827e548fc086251bfb48aacf05e5e6a87) | `ok` |
+| trade 2 (no disclosure) | [0x245d…828f](https://subnets-test.avax.network/c-chain/tx/0x245db1eead17d3172bcd6ef6c20fd9870a601f075a4d18ec8ca3b8e93ae6828f) | [0xca7a…bd91](https://testnet.monadvision.com/tx/0xca7a785e77a3e6fea308c96d1ed9e2524b467ebd393e731b75dd95514ccfbd91) | `UNATTESTED` |
+| disclose FAIL | [0x940d…e665](https://subnets-test.avax.network/c-chain/tx/0x940d3b02ef9a7d877a8c39bc06496061848e29e91b5c19795060128b6dc6e665) | [0x98f8…b724](https://testnet.monadvision.com/tx/0x98f8a234e9e490bfd078f7e8c961d8c2e0654a1f8ad2b289944bab32049ab724) | bookkeeping |
+| trade 3 | [0x6b6f…fbd7](https://subnets-test.avax.network/c-chain/tx/0x6b6f146026821521f062a0b07dee69f1fb1ab9ddfa598de6c8ab4d9ab3d6fbd7) | [0x73d7…a15f](https://testnet.monadvision.com/tx/0x73d78f288816b3203d45b26a3258bfec4eb645af13fea9807a391d0ecb37a15f) | `EXECUTED_AFTER_FAIL` |
+| revoke | [0xa2c0…5ef8](https://subnets-test.avax.network/c-chain/tx/0xa2c0cf457f60917defaa64c75d770644c8815943e3445267ee1139f3f5865ef8) | [0x77e0…d713](https://testnet.monadvision.com/tx/0x77e0ddb80e6b5977c675923236f4982abf8864f0367fb26940ee7e38ff1dd713) | |
+| trade 4 | [0xf82a…684c](https://subnets-test.avax.network/c-chain/tx/0xf82abcb8b0daac8c7265e1211c45efdcb1d2cb68c392d7f5ed7547c5db84684c) | [0x45da…42e3](https://testnet.monadvision.com/tx/0x45da797e9aae595528684e7e4ee3188991cb4ac99731cbc711d1f0c94b5b42e3) | `NO_ACTIVE_WARRANT` |
+
+Both chains: 4 actions, 3 violations, coverage 6 of 6. Reproduce:
+
+```bash
+node scripts/audit.mjs fuji  --principal 0xe4ebDEbd84f80bF592ca61C6eA56d10568D23aeA --agent 0xeb114deDc3883A4300fa0bBC29F5590607c0789E --from-block 58782113 --to-block 58782127
+node scripts/audit.mjs monad --principal 0xe4ebDEbd84f80bF592ca61C6eA56d10568D23aeA --agent 0xeb114deDc3883A4300fa0bBC29F5590607c0789E --from-block 66108417 --to-block 66108463
+```
+
+What it cannot see: whether a trade matched the quote that was disclosed (the swap transaction
+does not carry the quote id), and when a *signed* disclosure was signed (the EIP-712 payload has no
+timestamp, so for signed disclosures it proves existence, not order; the report says so). It scans
+every block in range, so it is meant for bounded windows (up to 20,000 blocks), not whole histories.
 
 ### Live run (2026-09-26)
 
@@ -274,7 +322,7 @@ a threshold.
 ## Tests
 
 ```bash
-npm test                              # scoring (9) + attestation builders (11) + on-chain integration on a local anvil (8)
+npm test                              # scoring (9) + attestation builders (11) + audit (18) + on-chain integration on a local anvil (8)
 git clone --depth 1 https://github.com/foundry-rs/forge-std contracts/lib/forge-std   # once
 cd contracts && forge test            # WarrantRegistry (13) + WarrantAttestor (14) + WarrantReputation on a Fuji fork of the live ERC-8004 registries (5)
 ```
