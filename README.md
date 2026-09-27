@@ -202,9 +202,11 @@ to the values written with `cast`, not to the plugin's own conversion code.
 - **Reveal, not enforce.** A plugin cannot intercept `mm`'s native commands; an agent can skip
   preflight. The attestation makes skipping *detectable*, not impossible.
 - **Attestation signer.** The `mm` server wallet *can* sign `attestPreflight` through
-  `mm wallet send-transaction`: tested on Fuji, tx
+  `mm wallet send-transaction`: tested on Fuji, PASS
   [`0xb828bf71…72c5`](https://subnets-test.avax.network/c-chain/tx/0xb828bf7129e386171a63a94e04bcbc18b687b09197460397972c5da3d73f72c5)
-  (from the server wallet, `PreflightAttested` with verdict PASS, 30,788 gas). Two caveats as of
+  and FAIL
+  [`0xea6abf03…9b03`](https://subnets-test.avax.network/c-chain/tx/0xea6abf0347f7340e69b0c0a10b3821a945d9d6877b3c5c6070410e1cfbfa9b03),
+  both sent from the server wallet (~30,800 gas each). Two caveats as of
   mm 6.2.0: Guard Mode asks for email/MFA approval for every transaction on a chain outside the
   wallet's `allowed_chains` (Fuji is not in the default list), and on Monad testnet (10143) the
   send fails before signing because MetaMask's RPC backend answers `Invalid chainId`. The scripted
