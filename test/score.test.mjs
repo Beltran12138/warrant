@@ -150,4 +150,30 @@ t("no-cross-chain warrant → crossChain fail", () => {
   assert.equal(sc.dimensions.find((d) => d.key === "crossChain")?.severity, "fail");
 });
 
+// Real Monad quote 0x2ade8da4…5256 (2026-09-27): fromUsd 0.02667, toUsd 0.02730, mm priceImpact -0.0236,
+// i.e. (fromUsd - toUsd) / fromUsd: negative means the quote pays more than the USD reference.
+t("negative price impact → pass, noted as in the trader's favour (not 'deep enough')", () => {
+  const sc = scoreSwap(
+    {
+      quoteId: "0x2ade8da4",
+      walletAddress: SELF,
+      recipientAddress: SELF,
+      srcChainId: 143,
+      destChainId: 143,
+      fromUsd: 0.0266708,
+      toUsd: 0.027307,
+      slippage: percentToFraction(0.5),
+      priceImpact: -0.0236,
+      feeUsd: 0,
+      destAmount: 27311,
+      minDestAmount: 27174,
+      requiresApproval: false,
+    },
+    DEFAULT_WARRANT,
+  );
+  const d = sc.dimensions.find((x) => x.key === "priceImpact");
+  assert.equal(d.severity, "pass");
+  assert.match(d.note, /in your favour/);
+});
+
 console.log(`\n${pass} passed`);

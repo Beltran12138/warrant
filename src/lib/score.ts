@@ -159,7 +159,14 @@ export function scoreSwap(swap: ProposedSwap, warrant: WarrantSpec): Scorecard {
       severity: sev,
       observed: `${pct(swap.priceImpact)} (${b}bps)`,
       limit: `≤ ${warrant.maxPriceImpactBps}bps`,
-      note: sev === "fail" ? "impact too high: thin pool or oversized order" : sev === "warn" ? "close to the limit" : "deep enough",
+      note:
+        sev === "fail"
+          ? "impact too high: thin pool or oversized order"
+          : sev === "warn"
+            ? "close to the limit"
+            : swap.priceImpact < 0
+              ? "negative: the quote pays more than the USD reference price (in your favour)"
+              : "deep enough",
     });
   }
 
