@@ -10,7 +10,7 @@ Warrant **reveals, it does not enforce.** It never custodies funds, never blocks
 tries to bypass a wallet's own guard rails. What it adds is *verifiability*: after the fact anyone
 can check what the agent was allowed to do, and prove it was told the trade was out of bounds.
 
-**Demo video (2:44, live run on Avalanche Fuji):** https://youtu.be/yitnbGgzKOA · **Pitch deck (EN/中文):** [`docs/warrant-pitch.pdf`](docs/warrant-pitch.pdf)
+**Demo videos:** Monad (2:31: real quote, mm-signed attestation, ERC-8004, audit) https://youtu.be/qOab45ZLuJg · Avalanche Fuji (2:44) https://youtu.be/yitnbGgzKOA · **Pitch deck (EN/中文):** [`docs/warrant-pitch.pdf`](docs/warrant-pitch.pdf)
 
 > Renamed from "Mandate" on 2026-09-26 to avoid confusion with an unrelated project of the same
 > name. Contract, command and package names changed; nothing else did.
