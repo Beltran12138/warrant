@@ -17,10 +17,13 @@ import {
 } from "../../lib/score.js";
 import { loadWarrant } from "../../lib/spec.js";
 import {
+  type AttestationTypedData,
+  attestationTypedData,
   fetchGasPrice,
   MM_UNSUPPORTED_RPC_CHAINS,
   type MmSendTransaction,
   mmSendTransaction,
+  mmSignTypedDataCommand,
   quoteHash,
   readOnchainWarrant,
   scoreAgainstOnchain,
@@ -66,6 +69,13 @@ const inputs = {
     required: false,
     prompt: false,
   },
+  attestor: {
+    type: InputFieldType.Text,
+    flag: "attestor",
+    message: "WarrantAttestor address — also emit an EIP-712 attestation to sign off-chain (with --registry)",
+    required: false,
+    prompt: false,
+  },
   rpcUrl: {
     type: InputFieldType.Text,
     flag: "rpc-url",
@@ -87,6 +97,8 @@ type Attestation = {
   scorecardHash: string;
   /** The same attestation as an `mm wallet send-transaction` call, signed by the mm wallet itself. */
   mm: MmSendTransaction;
+  /** With --attestor: sign this off-chain (no transaction), then anyone submits it to WarrantAttestor. */
+  signed?: { attestor: string; typedData: AttestationTypedData; command: string };
 };
 
 type PreflightResult = {
@@ -132,7 +144,7 @@ export default class WarrantPreflight extends PluginCommand<PreflightResult> {
   protected readonly pluginCommandId = "warrant:preflight";
 
   async execute(io: CommandIO): Promise<PreflightResult> {
-    const { quoteId, warrantFile, registry, principal, agent, rpcUrl } = await io.resolveInputs(inputs);
+    const { quoteId, warrantFile, registry, principal, agent, attestor, rpcUrl } = await io.resolveInputs(inputs);
     const { spec, source } = loadWarrant(process.cwd(), warrantFile || "warrant.json");
 
     const store = this.ctx.swapQuoteStore;
@@ -220,6 +232,10 @@ export default class WarrantPreflight extends PluginCommand<PreflightResult> {
         agent: agentAddr,
         mm: mmSendTransaction(args, onchain.chainId, gasPrice),
       };
+      if (attestor?.trim()) {
+        const typedData = attestationTypedData(args, agentAddr, onchain.chainId, attestor.trim() as Address);
+        attestation.signed = { attestor: attestor.trim(), typedData, command: mmSignTypedDataCommand(typedData) };
+      }
     }
     return {
       scorecard,
@@ -321,6 +337,14 @@ export default class WarrantPreflight extends PluginCommand<PreflightResult> {
     return [
       out,
       "",
+      ...(a.signed
+        ? [
+            `Sign the attestation off-chain with the mm wallet (agent ${a.agent}; no transaction, no gas):`,
+            `  ${a.signed.command}`,
+            `then anyone can put it on-chain (WarrantAttestor ${a.signed.attestor}): save attestation.signed.typedData from --json output, and run node scripts/submit-signed.mjs <typed-data.json> <signature>`,
+            "Or send it as a transaction:",
+          ]
+        : []),
       `Attest on-chain that this scorecard was shown before execution (the active mm wallet must be agent ${a.agent}):`,
       `  ${a.mm.command}`,
       ...(a.mm.note ? [`  note: ${a.mm.note}`] : []),

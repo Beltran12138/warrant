@@ -199,3 +199,82 @@ export function mmSendTransaction(a: AttestArgs, chainId: number, gasPriceWei?: 
       : undefined,
   };
 }
+
+/** EIP-712 types of WarrantAttestor (contracts/src/WarrantAttestor.sol). */
+export const ATTESTATION_TYPES = {
+  EIP712Domain: [
+    { name: "name", type: "string" },
+    { name: "version", type: "string" },
+    { name: "chainId", type: "uint256" },
+    { name: "verifyingContract", type: "address" },
+  ],
+  PreflightAttestation: [
+    { name: "principal", type: "address" },
+    { name: "agent", type: "address" },
+    { name: "quoteHash", type: "bytes32" },
+    { name: "warrantVersion", type: "uint32" },
+    { name: "verdict", type: "uint8" },
+    { name: "scorecardHash", type: "bytes32" },
+  ],
+} as const;
+
+export const WARRANT_ATTESTOR_ABI = [
+  {
+    type: "function",
+    name: "submit",
+    stateMutability: "nonpayable",
+    inputs: [
+      {
+        name: "a",
+        type: "tuple",
+        components: ATTESTATION_TYPES.PreflightAttestation,
+      },
+      { name: "signature", type: "bytes" },
+    ],
+    outputs: [],
+  },
+  {
+    type: "function",
+    name: "digest",
+    stateMutability: "view",
+    inputs: [{ name: "a", type: "tuple", components: ATTESTATION_TYPES.PreflightAttestation }],
+    outputs: [{ name: "", type: "bytes32" }],
+  },
+] as const;
+
+export interface AttestationTypedData {
+  types: typeof ATTESTATION_TYPES;
+  primaryType: "PreflightAttestation";
+  domain: { name: "Warrant"; version: "1"; chainId: number; verifyingContract: Address };
+  message: {
+    principal: Address;
+    agent: Address;
+    quoteHash: Hex;
+    warrantVersion: number;
+    verdict: number;
+    scorecardHash: Hex;
+  };
+}
+
+/** Typed data the agent signs off-chain; anyone can then submit it to WarrantAttestor. */
+export function attestationTypedData(a: AttestArgs, agent: Address, chainId: number, attestor: Address): AttestationTypedData {
+  return {
+    types: ATTESTATION_TYPES,
+    primaryType: "PreflightAttestation",
+    domain: { name: "Warrant", version: "1", chainId, verifyingContract: attestor },
+    message: {
+      principal: a.principal,
+      agent,
+      quoteHash: a.quoteHash,
+      warrantVersion: a.warrantVersion,
+      verdict: a.verdict,
+      scorecardHash: a.scorecardHash,
+    },
+  };
+}
+
+/** `mm wallet sign-typed-data` command for the typed data (no transaction; no MFA in our Guard Mode tests). */
+export function mmSignTypedDataCommand(td: AttestationTypedData): string {
+  const verdict = ["PASS", "WARN", "FAIL"][td.message.verdict] ?? String(td.message.verdict);
+  return `mm wallet sign-typed-data --chain-id ${td.domain.chainId} --payload '${JSON.stringify(td)}' --intent "Warrant: sign ${verdict} preflight attestation v${td.message.warrantVersion}" --wait`;
+}
