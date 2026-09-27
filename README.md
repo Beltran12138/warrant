@@ -54,16 +54,22 @@ principal ──setWarrant / revoke──▶ WarrantRegistry (on-chain, per prin
 agent ── mm swap quote ──▶ mm warrant preflight ──▶ scorecard (pass / warn / fail)
                                          │
 agent ──attestPreflight(quoteHash, version, verdict, scorecardHash)──▶ PreflightAttested event
+   or
+agent ──mm wallet sign-typed-data (EIP-712, off-chain)──▶ anyone ──submit──▶ WarrantAttestor
+                                                          (checks signer + version) ──▶ SignedPreflightAttested
 ```
 
 | Layer | What | Where |
 |---|---|---|
 | Contract | `WarrantRegistry`: set / revoke / read warrants; `attestPreflight` emits an event bound to the current warrant version (stale or revoked versions revert) | `contracts/src/WarrantRegistry.sol` |
+| Contract | `WarrantAttestor`: relays an agent-signed EIP-712 attestation; checks the signer is the agent and the warrant is active at the signed version (reads the registry, never writes it); rejects replays and malleable signatures | `contracts/src/WarrantAttestor.sol` |
 | Scoring | 7-dimension scorer + worst-case loss, pure functions | `src/lib/score.ts` |
 | Chain I/O | read the warrant, canonical scorecard hash, quote hash | `src/lib/onchain.ts` |
 | CLI | `mm warrant preflight` plugin command | `src/commands/warrant/preflight.ts` |
 | Agent instructions | when to preflight, stop, ask, attest | `skills/warrant/SKILL.md` |
 | Live walkthrough | grant → preflight → attest → revoke on a real testnet | `scripts/demo-onchain.mjs` |
+| Relayer | put an agent-signed attestation on-chain | `scripts/submit-signed.mjs` |
+| RPC shim | lets `mm wallet send-transaction` reach Monad testnet (see Limitations) | `scripts/mm-rpc-shim.mjs` |
 
 **Tech stack:** Solidity 0.8.28 + Foundry 1.8.3 · TypeScript on Node 22+ · viem 2.56 ·
 MetaMask Agent Wallet plugin SDK (`@metamask/agent-wallet` 6.2.0, oclif) · Monad testnet ·
@@ -81,6 +87,26 @@ Avalanche Fuji C-Chain.
 
 Deployment records: `contracts/broadcast/Deploy.s.sol/{10143,43113}/`. The records also contain the
 first deployment under the old name (`MandateRegistry`, `0xf0145a8b…1f48`), kept as history.
+
+`WarrantAttestor` is also at the same address on both chains, pointing at the registry above:
+`0xC356ac5ebD7d249102D3C9c25764A8815c1718aA` (deploy txs: Monad `0xa65b871f…1a92`, Fuji
+`0x75d86fbf…a859`; records in `contracts/broadcast/DeployAttestor.s.sol/`).
+
+### Attestations signed by the MetaMask wallet itself (2026-09-27)
+
+The agent here is the `mm` server wallet `0x299e298ded14b36412a7857ed02b844e7fb58e0e` (Guard Mode),
+granted warrant v1 on both chains. Two ways to attest, both tested live:
+
+| | Transaction (`mm wallet send-transaction` → `attestPreflight`) | Signature (`mm wallet sign-typed-data` → relayed to `WarrantAttestor`) |
+|---|---|---|
+| Fuji | PASS [0xb828…72c5](https://subnets-test.avax.network/c-chain/tx/0xb828bf7129e386171a63a94e04bcbc18b687b09197460397972c5da3d73f72c5), FAIL [0xea6a…9b03](https://subnets-test.avax.network/c-chain/tx/0xea6abf0347f7340e69b0c0a10b3821a945d9d6877b3c5c6070410e1cfbfa9b03) | PASS [0x0f5a…0cfd](https://subnets-test.avax.network/c-chain/tx/0x0f5a267d24319412848f43aaab09d887259514cff0eb307ae1ebd4d3a13a0cfd), FAIL [0x8721…38f7](https://subnets-test.avax.network/c-chain/tx/0x872190d4135a4d94507b7b96c5229cae0b3d821ed61c29882ce5a6ada32c38f7) |
+| Monad testnet | PASS [0xb362…8905](https://testnet.monadvision.com/tx/0xb3628760504e15ec59a3276360c253d60a90b2314b3b6fffe63b80d7f7db8905) (through the RPC shim) | PASS [0x0540…1f6f](https://testnet.monadvision.com/tx/0x054090711acd2685aa8e90ec4d0f1425e4e4bc87a58e1b8c13386e31e88c1f6f) |
+| Agent pays gas | yes (~31k–35k) | no; the relayer pays (67,577 gas on Fuji; 88,716 billed on Monad, which charges the gas limit) |
+| Guard Mode approval | one email approval per transaction (these testnets are not in the default `allowed_chains`) | none: signed immediately, in every attempt |
+| Monad RPC shim needed | yes | no |
+
+The signature path is what an unattended agent would use: it signs every scorecard for free and
+without waiting for a human, and the evidence becomes public once anyone relays it.
 
 ### Live run (2026-09-26)
 
@@ -165,7 +191,15 @@ mm swap quote ...                     # creates a stored quote
 mm warrant preflight \
   --registry 0x37cdFe2a144993dC3145367305fF66E29302E673 \
   --principal <PRINCIPAL> \
-  --rpc-url https://testnet-rpc.monad.xyz
+  --rpc-url https://testnet-rpc.monad.xyz \
+  --attestor 0xC356ac5ebD7d249102D3C9c25764A8815c1718aA     # optional: also emit the EIP-712 attestation
+```
+
+With `--attestor`, the output also carries `attestation.signed`: the typed data and a ready-to-run
+`mm wallet sign-typed-data` command. Sign, then relay with any funded key:
+
+```bash
+node scripts/submit-signed.mjs typed-data.json <signature>   # checks the signer locally, then submits
 ```
 
 The output ends with a ready-to-run `mm wallet send-transaction … attestPreflight(…)` command, so
@@ -203,9 +237,9 @@ a threshold.
 ## Tests
 
 ```bash
-npm test                              # scoring (9) + attest call builder (5) + on-chain integration on a local anvil (8)
+npm test                              # scoring (9) + attestation builders (11) + on-chain integration on a local anvil (8)
 git clone --depth 1 https://github.com/foundry-rs/forge-std contracts/lib/forge-std   # once
-cd contracts && forge test            # contract (13)
+cd contracts && forge test            # WarrantRegistry (13) + WarrantAttestor (14)
 ```
 
 The integration test deploys to a local anvil, writes a warrant with `cast`, reads it back through
