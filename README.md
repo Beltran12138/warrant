@@ -168,9 +168,24 @@ mm warrant preflight \
   --rpc-url https://testnet-rpc.monad.xyz
 ```
 
-The output ends with the exact `cast send … attestPreflight(…)` command for the agent to record
-the disclosure on-chain. Without `--registry`, preflight falls back to a local `warrant.json`
-(see `warrant.example.json`).
+The output ends with a ready-to-run `mm wallet send-transaction … attestPreflight(…)` command, so
+the **mm wallet that will trade signs the disclosure itself** (JSON output carries the same call under
+`attestation.mm`). Grant the warrant to that wallet's address (`mm wallet list`). A `cast send`
+variant is printed too, for agents that hold their own key. Without `--registry`, preflight falls
+back to a local `warrant.json` (see `warrant.example.json`).
+
+On Monad testnet, mm 6.2.0 needs a local RPC shim because MetaMask's RPC proxy does not serve chain
+10143 yet (the preflight output says so and adds explicit gas and fees to the payload):
+
+```bash
+node scripts/mm-rpc-shim.mjs &                          # loopback only; logs chain + method
+MM_INFURA_RPC_BASE_URL=http://127.0.0.1:47812 mm wallet send-transaction --chain-id 10143 --payload '…'
+```
+
+Tested with the server wallet in Guard Mode: Monad testnet
+[`0xb3628760…8905`](https://testnet.monadvision.com/tx/0xb3628760504e15ec59a3276360c253d60a90b2314b3b6fffe63b80d7f7db8905),
+Fuji `0xb828bf71…72c5` (PASS) and `0xea6abf03…9b03` (FAIL). Each needed one email approval, because
+neither testnet is in the wallet's default `allowed_chains`.
 
 Live walkthrough without `mm` (uses synthetic quotes, real chain):
 
@@ -188,7 +203,7 @@ a threshold.
 ## Tests
 
 ```bash
-npm test                              # scoring (9) + on-chain integration on a local anvil (8)
+npm test                              # scoring (9) + attest call builder (5) + on-chain integration on a local anvil (8)
 git clone --depth 1 https://github.com/foundry-rs/forge-std contracts/lib/forge-std   # once
 cd contracts && forge test            # contract (13)
 ```
@@ -208,9 +223,11 @@ to the values written with `cast`, not to the plugin's own conversion code.
   [`0xea6abf03…9b03`](https://subnets-test.avax.network/c-chain/tx/0xea6abf0347f7340e69b0c0a10b3821a945d9d6877b3c5c6070410e1cfbfa9b03),
   both sent from the server wallet (~30,800 gas each). Two caveats as of
   mm 6.2.0: Guard Mode asks for email/MFA approval for every transaction on a chain outside the
-  wallet's `allowed_chains` (Fuji is not in the default list), and on Monad testnet (10143) the
-  send fails before signing because MetaMask's RPC backend answers `Invalid chainId`. The scripted
-  demo therefore signs with a separate agent EOA; the warrant is keyed to that address.
+  wallet's `allowed_chains` (neither testnet is in the default list), and on Monad testnet (10143)
+  MetaMask's RPC backend answers `Invalid chainId`, so mm needs `scripts/mm-rpc-shim.mjs`
+  ([`0xb3628760…8905`](https://testnet.monadvision.com/tx/0xb3628760504e15ec59a3276360c253d60a90b2314b3b6fffe63b80d7f7db8905)
+  went through it). Because of the per-transaction approval, the unattended
+  `scripts/demo-onchain.mjs` signs with a separate agent EOA instead.
 - **Prices are off-chain inputs.** USD values come from the quote. An attestation proves what the
   agent was shown, not that the price data was correct.
 - **Synthetic quotes in the demo.** A live `mm swap quote` needs a funded mainnet wallet; the

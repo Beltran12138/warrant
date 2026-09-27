@@ -28,13 +28,11 @@ prompt. Check every trade against them and leave a verifiable record that you di
 
    A missing, revoked or expired warrant is always `fail`: you are not authorised to trade.
 
-4. Attest before executing, using the `attestation` object from the JSON output:
-
-   ```bash
-   cast send <REGISTRY> "attestPreflight(address,bytes32,uint32,uint8,bytes32)" \
-     <principal> <quoteHash> <warrantVersion> <verdict> <scorecardHash> \
-     --rpc-url <RPC> --private-key $AGENT_PRIVATE_KEY
-   ```
+4. Attest before executing, from the same mm wallet that will trade: run the command in
+   `attestation.mm.command` from the JSON output (an `mm wallet send-transaction` call). If
+   `attestation.mm.note` is set, follow it first (on Monad testnet: start
+   `scripts/mm-rpc-shim.mjs` and set `MM_INFURA_RPC_BASE_URL`). In Guard Mode the wallet may ask
+   the human for an email approval; wait for it, do not work around it.
 
    If the attest call reverts with `StaleWarrantVersion`, the principal changed the warrant:
    re-run preflight and start over.
