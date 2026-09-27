@@ -14,7 +14,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { createWalletClient, defineChain, http, publicActions } from "viem";
-import { privateKeyToAccount } from "viem/accounts";
+import { nonceManager, privateKeyToAccount } from "viem/accounts";
 import { renderScorecard } from "../dist/lib/score.js";
 import {
   quoteHash,
@@ -108,7 +108,7 @@ const env = Object.fromEntries(
 );
 const rpcUrl = net.chain.rpcUrls.default.http[0];
 const client = (pk) =>
-  createWalletClient({ account: privateKeyToAccount(pk), chain: net.chain, transport: http(rpcUrl) }).extend(
+  createWalletClient({ account: privateKeyToAccount(pk, { nonceManager }), chain: net.chain, transport: http(rpcUrl) }).extend(
     publicActions,
   );
 const principal = client(env.DEPLOYER_PRIVATE_KEY);
