@@ -16,6 +16,9 @@ export interface ProposedSwap {
   destChainId?: number;
   srcSymbol?: string;
   destSymbol?: string;
+  /** Sell-side token address (zero address for the native coin) and amount in base units. */
+  srcAsset?: string;
+  srcAmount?: string;
   /** USD notional of the sell side (totalFromAmountUsd). */
   fromUsd?: number;
   /** USD notional of the buy side (totalToAmountUsd). */
@@ -252,4 +255,51 @@ export function scoreSwap(swap: ProposedSwap, warrant: WarrantSpec): Scorecard {
     dimensions: dims,
     notes,
   };
+}
+
+/** ERC-8226 `MandateReason`, in enum order (index = the uint8 returned by canExecute). */
+export const RAMS_REASONS = [
+  "OK",
+  "NONEXISTENT",
+  "WRONG_ASSET",
+  "NOT_YET_VALID",
+  "EXPIRED",
+  "REVOKED",
+  "ACTION_NOT_ENABLED",
+  "AGENT_FROZEN",
+  "PRINCIPAL_FROZEN",
+  "OVER_TX_CAP",
+  "OVER_CUMULATIVE_CAP",
+  "OTHER",
+] as const;
+
+/** Result of asking an ERC-8226 (RAMS) registry whether the agent's mandate covers this trade. */
+export interface RamsCheck {
+  registry: string;
+  asset: string;
+  /** Action label checked, e.g. "transferFrom". */
+  action: string;
+  /** Amount checked, in the asset's base units. */
+  amount: string;
+  ok: boolean;
+  /** Index into RAMS_REASONS. */
+  reason: number;
+}
+
+/** The RAMS answer as a scorecard dimension: the registry refusing is a fail, with its reason code. */
+export function ramsDimension(c: RamsCheck): Dimension {
+  const reason = RAMS_REASONS[c.reason] ?? `UNKNOWN(${c.reason})`;
+  return {
+    key: "ramsMandate",
+    label: "ERC-8226 mandate",
+    severity: c.ok ? "pass" : "fail",
+    observed: `${c.action} ${c.amount} of ${c.asset}: ${reason}`,
+    limit: `mandate in RAMS ${c.registry}`,
+    note: c.ok ? "the principal's RAMS mandate covers this action and amount" : "the RAMS registry refuses this action; the asset would revert it",
+  };
+}
+
+/** Add a dimension to a scored card; the verdict can only get worse. */
+export function withDimension(sc: Scorecard, d: Dimension): Scorecard {
+  return { ...sc, verdict: worst([sc.verdict, d.severity]), dimensions: [...sc.dimensions, d] };
 }

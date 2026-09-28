@@ -1,5 +1,16 @@
-import { createPublicClient, encodeFunctionData, http, keccak256, stringToHex, toHex, type Address, type Hex } from "viem";
-import { scoreSwap, type WarrantSpec, type ProposedSwap, type Scorecard, type Severity } from "./score.js";
+import {
+  createPublicClient,
+  encodeFunctionData,
+  http,
+  keccak256,
+  pad,
+  stringToHex,
+  toFunctionSelector,
+  toHex,
+  type Address,
+  type Hex,
+} from "viem";
+import { scoreSwap, type RamsCheck, type WarrantSpec, type ProposedSwap, type Scorecard, type Severity } from "./score.js";
 
 /** Minimal ABI slice of contracts/src/WarrantRegistry.sol used by the plugin. */
 export const WARRANT_REGISTRY_ABI = [
@@ -118,6 +129,60 @@ export function scoreAgainstOnchain(swap: ProposedSwap, onchain: OnchainWarrant)
     );
   }
   return scorecard;
+}
+
+/** ABI slice of an ERC-8226 (RAMS) registry and of a RAMS-gated asset (the reference `RamsGated`). */
+export const RAMS_ABI = [
+  {
+    type: "function",
+    name: "canExecute",
+    stateMutability: "view",
+    inputs: [
+      { name: "agent", type: "address" },
+      { name: "principal", type: "address" },
+      { name: "asset", type: "address" },
+      { name: "action", type: "bytes32" },
+      { name: "amount", type: "uint256" },
+    ],
+    outputs: [
+      { name: "ok", type: "bool" },
+      { name: "reason", type: "uint8" },
+    ],
+  },
+  { type: "function", name: "rams", stateMutability: "view", inputs: [], outputs: [{ name: "", type: "address" }] },
+] as const;
+
+/**
+ * The action an agent uses to move a holder's asset: `bytes32(IERC20.transferFrom.selector)`, the
+ * label the reference RamsGatedURWA20 gates transferFrom with (a bytes4 left-aligned in bytes32).
+ */
+export const RAMS_TRANSFER_FROM: Hex = pad(toFunctionSelector("transferFrom(address,address,uint256)"), { dir: "right", size: 32 });
+
+/**
+ * Ask a RAMS registry whether the agent may sell this amount of the principal's asset. Returns
+ * undefined when the asset is not gated by that registry (native coin, plain ERC-20, or another
+ * registry): the mandate does not apply, so it must not fail the trade.
+ */
+export async function readRamsCheck(opts: {
+  rpcUrl: string;
+  registry: Address;
+  agent: Address;
+  principal: Address;
+  asset: Address;
+  amount: bigint;
+}): Promise<RamsCheck | undefined> {
+  const client = createPublicClient({ transport: http(opts.rpcUrl) });
+  const gatedBy = await client
+    .readContract({ address: opts.asset, abi: RAMS_ABI, functionName: "rams" })
+    .catch(() => undefined);
+  if (!gatedBy || gatedBy.toLowerCase() !== opts.registry.toLowerCase()) return undefined;
+  const [ok, reason] = await client.readContract({
+    address: opts.registry,
+    abi: RAMS_ABI,
+    functionName: "canExecute",
+    args: [opts.agent, opts.principal, opts.asset, RAMS_TRANSFER_FROM, opts.amount],
+  });
+  return { registry: opts.registry, asset: opts.asset, action: "transferFrom", amount: opts.amount.toString(), ok, reason };
 }
 
 /** Verdict enum index in WarrantRegistry (Pass=0, Warn=1, Fail=2). */

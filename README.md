@@ -46,6 +46,27 @@ and leaves a public record.
 - **Anyone reviewing an agent after the fact**: every attestation is public, so "was the agent told
   this trade was out of bounds?" has a verifiable answer.
 
+## Related work: ERC-8226 (Regulated Agent Mandate)
+
+[ERC-8226](https://github.com/ethereum/ERCs/blob/master/ERCS/erc-8226.md) ("RAMS", Draft, by
+Brickken) lets a verified principal delegate scoped, time-bounded, financially capped authority to
+an on-chain agent, and has a regulated token check that mandate before an agent-initiated action.
+It overlaps with Warrant's first half (principal → agent, revocable, expiring, capped, EIP-712) and
+answers a different question:
+
+| | ERC-8226 RAMS | Warrant |
+|---|---|---|
+| Question | Was this agent authorised to act for this principal on this asset? | Was *this particular trade* suitable, and was the agent told before it acted? |
+| Limits | asset address, action type, per-tx and cumulative quantity, validity window | slippage, price impact, fee load, recipient, new approvals, cross-chain route, USD size |
+| Where it applies | tokens that implement the RAMS gate (regulated assets) | any swap an `mm` agent is about to make |
+| Mode | enforces: the gated token reverts | reveals: signed disclosure, then audit |
+| Principal eligibility | `IComplianceProvider` (KYC / investor status) | out of scope |
+
+A RAMS mandate can hold and a trade still be unsuitable (a 3% slippage sale of a bond the agent was
+allowed to sell); a Warrant scorecard can pass for an asset the agent was never mandated to touch.
+They are complements. `mm warrant preflight --rams <registry>` reads a RAMS mandate into the
+scorecard when the trade touches a RAMS-gated asset (see below).
+
 ## Architecture
 
 ```
@@ -74,6 +95,7 @@ agent ──mm wallet sign-typed-data (EIP-712, off-chain)──▶ anyone ─�
 | Contract | `WarrantReputation`: each verified attestation becomes one ERC-8004 feedback entry on the agent's identity (see below) | `contracts/src/WarrantReputation.sol` |
 | ERC-8004 identity | mint the agent's identity and bind its `agentWallet` to the mm wallet | `scripts/register-agent.mjs` |
 | Audit | violation detector: trades without an active warrant, without a disclosure, or after disclosing FAIL | `src/lib/audit.ts`, `scripts/audit.mjs` |
+| ERC-8226 | `--rams <registry>`: when the sold asset is RAMS-gated, the agent's mandate check becomes a scorecard dimension | `readRamsCheck` in `src/lib/onchain.ts`; vendored reference in `rams/`; `scripts/demo-rams.mjs` |
 
 **Tech stack:** Solidity 0.8.28 + Foundry 1.8.3 · TypeScript on Node 22+ · viem 2.56 ·
 MetaMask Agent Wallet plugin SDK (`@metamask/agent-wallet` 6.2.0, oclif) · Monad testnet ·
@@ -193,6 +215,30 @@ does not carry the quote id), and when a *signed* disclosure was signed (the EIP
 timestamp, so for signed disclosures it proves existence, not order; the report says so). It scans
 every block in range, so it is meant for bounded windows (up to 20,000 blocks), not whole histories.
 
+### ERC-8226: a RAMS mandate and a Warrant scorecard on the same trades (2026-09-28)
+
+The unmodified ERC-8226 reference implementation is deployed on Monad testnet (addresses and
+provenance in [`rams/README.md`](rams/README.md)); its ERC-7943 mock asset stands in for a
+tokenized bond ("wDBOND"). The principal holds 1,000 wDBOND and grants the agent both a **RAMS
+mandate** (`transferFrom` only, ≤100 per trade, ≤250 in total) and a **Warrant** (≤100 bps slippage,
+etc.). `scripts/demo-rams.mjs` then preflights three sales with `readRamsCheck`, the same call
+`mm warrant preflight --rams` makes, so the RAMS answer is inside the attested scorecard hash:
+
+| Sale | RAMS `canExecute` | Warrant | Attestation | What happened |
+|---|---|---|---|---|
+| A. 50 wDBOND, 0.5% slippage | `OK` | PASS | [0x9de6…6285](https://testnet.monadvision.com/tx/0x9de6b65eac9d960f34a93466b4a3263655482f46905cc6b303cf61b8593e6285) | agent sold: [0x65e9…a56d](https://testnet.monadvision.com/tx/0x65e90803d98a484c14c98ba185ed7e97ad32fcba77f8fe1b939b01463c08a56d) |
+| B. 80 wDBOND, **3%** slippage | `OK` | **FAIL** (slippage) | [0x5385…0bd3](https://testnet.monadvision.com/tx/0x53857706c36de7ee49ce606af96df83fe8f502dc2c32f8498ecd51c562f10bd3) | agent stopped; RAMS alone would have allowed it |
+| C. **150** wDBOND, 0.5% slippage | `OVER_TX_CAP` | **FAIL** (mandate) | [0x8a36…3bd5](https://testnet.monadvision.com/tx/0x8a3636f47fe53214ea8ea6fefa6b37a2c598b0f3dbc298743cce081b165e3bd5) | the token itself reverts `MandateBlocked(OVER_TX_CAP)` (checked with `eth_call`) |
+
+Setup transactions: mandate [0xe7d4…7671](https://testnet.monadvision.com/tx/0xe7d47440317d88cf96af4ab1cb7473d7961e4d5075da84a39ad83bd434937671),
+warrant v5 [0x845d…5287](https://testnet.monadvision.com/tx/0x845d78e3d61246eca563710d618fdd0de0d542884aaa3876812c8c202c9f5287).
+Sale B is the point: a mandate that holds does not make a trade suitable. Limits of this demo: the
+quotes are synthetic (no DEX lists wDBOND), the "sale" settles as `transferFrom` to a venue address,
+one key plays principal, compliance operator and token admin, and the `--rams` CLI flag has been
+exercised through the same library functions but not yet against a real `mm` stored quote of a
+RAMS-gated asset. `test/rams.test.mjs` checks on anvil that every RAMS verdict the plugin reports
+matches what the gated token does with the same call (accept, `OVER_TX_CAP`, `OVER_CUMULATIVE_CAP`).
+
 ### Live run (2026-09-26)
 
 `scripts/demo-onchain.mjs` executed on both chains: grant → preflight against the on-chain warrant
@@ -219,9 +265,13 @@ half lives on Monad testnet. An agent that trades at machine frequency needs a p
 attestation per quote; that is only reasonable on a chain with high throughput and fast blocks.
 Measured cost of one `attestPreflight` on Monad testnet: 35,130 gas at 102 gwei = 0.0036 MON.
 
-**Avalanche.** Same contract on the Fuji C-Chain. Sub-second finality means the attestation is
-final before the agent's trade would be, so "the agent was told first" is true in wall-clock
-order, not just in intent. Measured cost of one `attestPreflight` on Fuji: 30,788 gas at a
+**Avalanche.** Same contract on the Fuji C-Chain. Snowman consensus fixes the order of accepted
+blocks in under a second with no reorgs, so an attestation accepted before the trade stays before
+it. Since the Helicon upgrade (ACP-194; scheduled by avalanchego for Fuji on 2026-07-28 and mainnet
+on 2026-09-22, both before the Fuji transactions in this README) C-Chain execution is asynchronous:
+a block is accepted first, executed after, and its results settled about τ = 5 s later. So order
+is final at acceptance, but an agent that waits for the attestation's receipt before trading is
+waiting for execution, not acceptance. Measured cost of one `attestPreflight` on Fuji: 30,788 gas at a
 160 wei gas price, i.e. effectively free. This build does not use Avalanche L1s, ICM or x402.
 
 ## What the preflight checks
@@ -322,9 +372,11 @@ a threshold.
 ## Tests
 
 ```bash
-npm test                              # scoring (9) + attestation builders (11) + audit (18) + on-chain integration on a local anvil (8)
+npm test                              # scoring (10) + attestation builders (11) + audit (18) + on-chain integration on a local anvil (8) + ERC-8226 on anvil (8)
 git clone --depth 1 https://github.com/foundry-rs/forge-std contracts/lib/forge-std   # once
+(cd rams && git clone --depth 1 --branch v5.4.0 https://github.com/OpenZeppelin/openzeppelin-contracts lib/openzeppelin-contracts && git clone --depth 1 https://github.com/foundry-rs/forge-std lib/forge-std)   # once, for the ERC-8226 test
 cd contracts && forge test            # WarrantRegistry (13) + WarrantAttestor (14) + WarrantReputation on a Fuji fork of the live ERC-8004 registries (5)
+cd ../rams && forge test               # the vendored ERC-8226 reference suite (105), unmodified
 ```
 
 The integration test deploys to a local anvil, writes a warrant with `cast`, reads it back through
@@ -375,6 +427,7 @@ Both hackathons allow a pre-existing foundation if it is disclosed. Timeline:
 | 2026-09-03 → 09-14 | Preflight command, 7-dimension scoring (`src/lib/score.ts`), limits loader (`src/lib/spec.ts`), unit tests, offline demo. | File modification dates; snapshot commit `10d4f25` |
 | 2026-09-25 → | Registry contract and tests, on-chain preflight (`src/lib/onchain.ts`), anvil integration test, deployments to Monad testnet and Fuji, live demo, agent skill, this README. | Commits from `b923d94` on |
 | 2026-09-26 | Renamed Mandate → Warrant; redeployed as `WarrantRegistry`. | This commit and later |
+| 2026-09-27 → 09-28 | Signed attestations (`WarrantAttestor`), ERC-8004 identity and reputation, audit, real `mm` quotes, ERC-8226 (RAMS) integration. | Commits and deployments listed above |
 
 **Version control started late.** The repository was only put under git on 2026-09-25, so work from
 09-03 to 09-14 appears as one snapshot commit instead of its own history. No commit is backdated.

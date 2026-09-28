@@ -14,6 +14,8 @@ import {
   renderScorecard,
   type Scorecard,
   scoreSwap,
+  ramsDimension,
+  withDimension,
 } from "../../lib/score.js";
 import { loadWarrant } from "../../lib/spec.js";
 import {
@@ -26,6 +28,7 @@ import {
   mmSignTypedDataCommand,
   quoteHash,
   readOnchainWarrant,
+  readRamsCheck,
   scoreAgainstOnchain,
   scorecardHash,
   VERDICT_INDEX,
@@ -73,6 +76,13 @@ const inputs = {
     type: InputFieldType.Text,
     flag: "attestor",
     message: "WarrantAttestor address — also emit an EIP-712 attestation to sign off-chain (with --registry)",
+    required: false,
+    prompt: false,
+  },
+  rams: {
+    type: InputFieldType.Text,
+    flag: "rams",
+    message: "ERC-8226 (RAMS) registry — when the sold asset is gated by it, add the agent's mandate check to the scorecard (with --registry, same RPC)",
     required: false,
     prompt: false,
   },
@@ -144,7 +154,7 @@ export default class WarrantPreflight extends PluginCommand<PreflightResult> {
   protected readonly pluginCommandId = "warrant:preflight";
 
   async execute(io: CommandIO): Promise<PreflightResult> {
-    const { quoteId, warrantFile, registry, principal, agent, attestor, rpcUrl } = await io.resolveInputs(inputs);
+    const { quoteId, warrantFile, registry, principal, agent, attestor, rams, rpcUrl } = await io.resolveInputs(inputs);
     const { spec, source } = loadWarrant(process.cwd(), warrantFile || "warrant.json");
 
     const store = this.ctx.swapQuoteStore;
@@ -211,7 +221,8 @@ export default class WarrantPreflight extends PluginCommand<PreflightResult> {
       };
     }
 
-    const scorecard = scoreAgainstOnchain(swap, onchain);
+    let scorecard = scoreAgainstOnchain(swap, onchain);
+    if (rams?.trim()) scorecard = await this.addRams(scorecard, swap, rams.trim() as Address, rpcUrl.trim(), agentAddr, principal.trim() as Address);
     let attestation: Attestation | undefined;
     if (onchain.active) {
       const args = {
@@ -243,6 +254,36 @@ export default class WarrantPreflight extends PluginCommand<PreflightResult> {
       warrantSource: `${onchain.source} v${onchain.version}${onchain.active ? "" : " (inactive)"}`,
       attestation,
     };
+  }
+
+  /** Fold an ERC-8226 mandate check into the scorecard when the sold asset is gated by that registry. */
+  private async addRams(
+    sc: Scorecard,
+    swap: ProposedSwap,
+    registry: Address,
+    rpcUrl: string,
+    agent: Address,
+    principal: Address,
+  ): Promise<Scorecard> {
+    if (!swap.srcAsset || !swap.srcAmount) {
+      return { ...sc, notes: [...sc.notes, "RAMS: the quote has no sell-side asset or amount; mandate not checked."] };
+    }
+    try {
+      const check = await readRamsCheck({ rpcUrl, registry, agent, principal, asset: swap.srcAsset as Address, amount: BigInt(swap.srcAmount) });
+      if (!check) {
+        return { ...sc, notes: [...sc.notes, `RAMS: ${swap.srcAsset} is not gated by ${registry}; no mandate applies.`] };
+      }
+      return withDimension(sc, ramsDimension(check));
+    } catch (e) {
+      return withDimension(sc, {
+        key: "ramsMandate",
+        label: "ERC-8226 mandate",
+        severity: "warn",
+        observed: "could not evaluate",
+        limit: `mandate in RAMS ${registry}`,
+        note: `registry call failed: ${(e as Error).message.split("\n")[0]}`,
+      });
+    }
   }
 
   /** Latest by createdAt; falls back to the last id when createdAt is missing. */
@@ -282,7 +323,8 @@ export default class WarrantPreflight extends PluginCommand<PreflightResult> {
         quote?: {
           srcChainId?: number;
           destChainId?: number;
-          srcAsset?: { symbol?: string };
+          srcAsset?: { symbol?: string; address?: string };
+          srcAssetAmount?: string;
           destAsset?: { symbol?: string };
           destAssetAmount?: string;
           minDestAssetAmount?: string;
@@ -315,6 +357,8 @@ export default class WarrantPreflight extends PluginCommand<PreflightResult> {
       srcChainId: q?.srcChainId ?? r?.srcChainId,
       destChainId: q?.destChainId ?? r?.destChainId,
       srcSymbol: q?.srcAsset?.symbol,
+      srcAsset: q?.srcAsset?.address,
+      srcAmount: q?.srcAssetAmount,
       destSymbol: q?.destAsset?.symbol,
       fromUsd: toNum(q?.priceData?.totalFromAmountUsd),
       toUsd: toNum(q?.priceData?.totalToAmountUsd),

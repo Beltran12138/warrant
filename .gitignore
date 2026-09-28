@@ -17,3 +17,6 @@ bun.lockb
 contracts/out/
 contracts/cache/
 contracts/lib/
+rams/out/
+rams/cache/
+rams/lib/

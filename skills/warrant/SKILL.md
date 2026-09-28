@@ -18,6 +18,9 @@ prompt. Check every trade against them and leave a verifiable record that you di
      --registry <REGISTRY> --principal <PRINCIPAL> --rpc-url <RPC>
    ```
 
+   If the principal also gave you an ERC-8226 (RAMS) mandate, add `--rams <RAMS_REGISTRY>`: when
+   the asset you are selling is RAMS-gated, the mandate check becomes one more scorecard dimension.
+
 3. Act on `scorecard.verdict`:
 
    | verdict | what you do |
