@@ -5,6 +5,7 @@
 import assert from "node:assert/strict";
 import {
   DEFAULT_WARRANT,
+  networkFeeUsd,
   normalizeImpact,
   percentToFraction,
   scoreSwap,
@@ -18,6 +19,35 @@ const t = (name, fn) => {
 };
 
 const SELF = "0xabc0000000000000000000000000000000000001";
+
+// Network fee in USD, from a real Arc mainnet quote (0xb5a7cebf…9ad3, 2026-10-05): selling 0.5 USDC,
+// gas 0.009968918446718688 USDC. By hand: 0.0099689184 × (0.499968 / 0.5) = 0.0099682804.
+const ARC_Q = {
+  networkFeeAmount: "0.009968918446718688",
+  networkFeeSymbol: "USDC",
+  srcSymbol: "USDC",
+  srcAmount: "500000000000000000",
+  srcDecimals: 18,
+  fromUsd: 0.499968,
+};
+t("networkFeeUsd: Arc gas in USDC priced at the sell side's rate", () => {
+  assert.ok(Math.abs(networkFeeUsd(ARC_Q) - 0.0099682804) < 1e-9);
+});
+t("networkFeeUsd: fee coin differs from the sold coin → undefined (not guessed)", () => {
+  assert.equal(networkFeeUsd({ ...ARC_Q, networkFeeSymbol: "ETH" }), undefined);
+});
+t("networkFeeUsd: unknown decimals → undefined", () => {
+  assert.equal(networkFeeUsd({ ...ARC_Q, srcDecimals: undefined }), undefined);
+});
+t("fee load with Arc gas included: ~199bps fails a 50bps warrant", () => {
+  const sc = scoreSwap(
+    { quoteId: "arc", walletAddress: SELF, recipientAddress: SELF, srcChainId: 5042, destChainId: 5042, fromUsd: 0.499968, feeUsd: 0.0099682804 },
+    DEFAULT_WARRANT,
+  );
+  const fees = sc.dimensions.find((d) => d.key === "fees");
+  assert.equal(fees.severity, "fail");
+  assert.equal(fees.observed, "$0.01 (199bps)");
+});
 
 // Unit conversion
 t("percentToFraction: mm's 0.5 (%) → 0.005", () => {

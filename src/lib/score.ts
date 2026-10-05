@@ -31,7 +31,7 @@ export interface ProposedSwap {
   destAmount?: number;
   /** Worst acceptable destination amount (minDestAssetAmount). */
   minDestAmount?: number;
-  /** Total fees in USD (metabridge + txFee). */
+  /** Total fees in USD (metabridge + txFee + the network fee when the quote prices it, see networkFeeUsd). */
   feeUsd?: number;
   /** Network fee (decimal string in the source chain's native coin) and its symbol. */
   networkFeeAmount?: string;
@@ -87,6 +87,26 @@ export const percentToFraction = (p: number): number => p / 100;
 
 /** priceImpact is a fraction; values > 1 are treated as a percentage. */
 export const normalizeImpact = (n: number): number => (n > 1 ? n / 100 : n);
+
+/**
+ * USD value of the quote's network fee, when the quote itself prices it: the fee is paid in the coin
+ * being sold (e.g. USDC on Arc, where USDC is the gas token; MON when selling MON), so the sell side's
+ * own USD rate applies. Undefined otherwise — the fee is then left out rather than guessed.
+ */
+export const networkFeeUsd = (q: {
+  networkFeeAmount?: string;
+  networkFeeSymbol?: string;
+  srcSymbol?: string;
+  srcAmount?: string;
+  srcDecimals?: number;
+  fromUsd?: number;
+}): number | undefined => {
+  const fee = Number(q.networkFeeAmount);
+  const units = Number(q.srcAmount) / 10 ** (q.srcDecimals ?? NaN);
+  if (!q.networkFeeSymbol || q.networkFeeSymbol !== q.srcSymbol) return undefined;
+  if (!Number.isFinite(fee) || !Number.isFinite(units) || units <= 0 || q.fromUsd === undefined) return undefined;
+  return fee * (q.fromUsd / units);
+};
 
 const bps = (frac: number) => Math.round(frac * 10000);
 const pct = (frac: number) => `${(frac * 100).toFixed(2)}%`;

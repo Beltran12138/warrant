@@ -16,6 +16,7 @@ import {
   scoreSwap,
   ramsDimension,
   withDimension,
+  networkFeeUsd,
 } from "../../lib/score.js";
 import { loadWarrant } from "../../lib/spec.js";
 import {
@@ -323,13 +324,14 @@ export default class WarrantPreflight extends PluginCommand<PreflightResult> {
         quote?: {
           srcChainId?: number;
           destChainId?: number;
-          srcAsset?: { symbol?: string; address?: string };
+          srcAsset?: { symbol?: string; address?: string; decimals?: number };
           srcAssetAmount?: string;
           destAsset?: { symbol?: string };
           destAssetAmount?: string;
           minDestAssetAmount?: string;
           slippage?: number;
           requiresApproval?: boolean;
+          gasIncluded?: boolean;
           networkFee?: { amount?: string; symbol?: string };
           priceData?: {
             priceImpact?: string;
@@ -345,9 +347,21 @@ export default class WarrantPreflight extends PluginCommand<PreflightResult> {
     };
     const q = p.result?.quote;
     const r = p.result?.request;
+    // Gas the trader pays on top counts toward the fee load (unless the quote already nets it out).
+    const gasUsd = q?.gasIncluded
+      ? undefined
+      : networkFeeUsd({
+          networkFeeAmount: q?.networkFee?.amount,
+          networkFeeSymbol: q?.networkFee?.symbol,
+          srcSymbol: q?.srcAsset?.symbol,
+          srcAmount: q?.srcAssetAmount,
+          srcDecimals: q?.srcAsset?.decimals,
+          fromUsd: toNum(q?.priceData?.totalFromAmountUsd),
+        });
     const feeUsd =
-      (toNum(q?.feeData?.metabridge?.usd) ?? 0) + (toNum(q?.feeData?.txFee?.usd) ?? 0);
-    const hasFee = q?.feeData?.metabridge?.usd !== undefined || q?.feeData?.txFee?.usd !== undefined;
+      (toNum(q?.feeData?.metabridge?.usd) ?? 0) + (toNum(q?.feeData?.txFee?.usd) ?? 0) + (gasUsd ?? 0);
+    const hasFee =
+      q?.feeData?.metabridge?.usd !== undefined || q?.feeData?.txFee?.usd !== undefined || gasUsd !== undefined;
 
     return {
       quoteId,
