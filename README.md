@@ -98,7 +98,7 @@ agent ──mm wallet sign-typed-data (EIP-712, off-chain)──▶ anyone ─�
 | ERC-8226 | `--rams <registry>`: when the sold asset is RAMS-gated, the agent's mandate check becomes a scorecard dimension | `readRamsCheck` in `src/lib/onchain.ts`; vendored reference in `rams/`; `scripts/demo-rams.mjs` |
 
 **Tech stack:** Solidity 0.8.28 + Foundry 1.8.3 · TypeScript on Node 22+ · viem 2.56 ·
-MetaMask Agent Wallet plugin SDK (`@metamask/agent-wallet` 6.2.0, oclif) · Monad testnet ·
+MetaMask Agent Wallet plugin SDK (`@metamask/agent-wallet` 6.2.0, oclif) · Arc mainnet · Monad testnet ·
 Avalanche Fuji C-Chain.
 
 ## Deployments
@@ -117,6 +117,31 @@ first deployment under the old name (`MandateRegistry`, `0xf0145a8b…1f48`), ke
 `WarrantAttestor` is also at the same address on both chains, pointing at the registry above:
 `0xC356ac5ebD7d249102D3C9c25764A8815c1718aA` (deploy txs: Monad `0xa65b871f…1a92`, Fuji
 `0x75d86fbf…a859`; records in `contracts/broadcast/DeployAttestor.s.sol/`).
+
+### Arc mainnet (2026-10-05)
+
+The whole stack runs on [Arc](https://docs.arc.io) mainnet (chain 5042, USDC as gas), wired to Arc's own
+ERC-8004 v2.0.0 registries, and one real quote went the whole way:
+
+| | Address / transaction |
+|---|---|
+| `WarrantRegistry` | [`0x80B435fF87276f1302BfCAB4D7202555EeCDe73f`](https://explorer.arc.io/address/0x80B435fF87276f1302BfCAB4D7202555EeCDe73f) |
+| `WarrantAttestor` | [`0x33B7B8db2927783dEbb58a589CF5c7B95824fae1`](https://explorer.arc.io/address/0x33B7B8db2927783dEbb58a589CF5c7B95824fae1) |
+| `WarrantReputation` | [`0x30906fFDE26d87868B602D34DA96f2C0006e3962`](https://explorer.arc.io/address/0x30906fFDE26d87868B602D34DA96f2C0006e3962) (feedback client of ERC-8004 `ReputationRegistry` `0x8004BAa1…9b63`) |
+| Deploy + warrant v1 to the `mm` wallet | `contracts/script/DeployArc.s.sol`; records in `contracts/broadcast/DeployArc.s.sol/5042/` (4 txs, ~1.99M gas) |
+| Agent identity | ERC-8004 agentId **1419** on `IdentityRegistry` `0x8004A169…a432`: [register](https://explorer.arc.io/tx/0xa1e2d96c8d22678a527602ac067fbda1c2b828865a12f39380c141973e5a7cc5), [agentWallet := `mm` wallet](https://explorer.arc.io/tx/0x98ee08991dc29a09faca850f6ed2bae9a7abb9c48b4b11ba6113a4a0f1e51240) (signed by the `mm` wallet) |
+| Disclosure, relayed and rated | [`0x2123414c…11f6`](https://explorer.arc.io/tx/0x2123414c96c17804a6617192c719a172206baf38ebef2b4406e6e48309c711f6) |
+
+The quote is a real `mm swap quote` on Arc: 0.5 USDC → EURC through Uniswap
+(`0xb5a7cebf…9ad3`), price impact 0.08%, slippage 50 bps. Preflight against the warrant on Arc
+returned **FAIL on one dimension, fee load: $0.01 (199 bps) against a 50 bps limit**, because on
+Arc the gas is paid in the coin being sold and the quote prices it (0.00997 USDC network fee on a
+$0.50 trade). The `mm` server wallet signed that scorecard (`mm wallet sign-typed-data`, chain
+5042), and one relayed transaction recorded it in `WarrantAttestor` with the quote hash
+`0xac086309…b68c` and scorecard hash `0x3b065817…a596` that preflight printed, and posted ERC-8004
+feedback `warrant-preflight / fail` for agent 1419. No swap was executed: the agent disclosed FAIL
+and stopped. Before deploying, `contracts/test/ArcMainnet.fork.t.sol` ran the same flow on an Arc
+mainnet fork against the live registries.
 
 ### Attestations signed by the MetaMask wallet itself (2026-09-27)
 
@@ -372,10 +397,10 @@ a threshold.
 ## Tests
 
 ```bash
-npm test                              # scoring (10) + attestation builders (11) + audit (18) + on-chain integration on a local anvil (8) + ERC-8226 on anvil (8)
+npm test                              # scoring (14) + attestation builders (11) + audit (18) + on-chain integration on a local anvil (8) + ERC-8226 on anvil (8)
 git clone --depth 1 https://github.com/foundry-rs/forge-std contracts/lib/forge-std   # once
 (cd rams && git clone --depth 1 --branch v5.4.0 https://github.com/OpenZeppelin/openzeppelin-contracts lib/openzeppelin-contracts && git clone --depth 1 https://github.com/foundry-rs/forge-std lib/forge-std)   # once, for the ERC-8226 test
-cd contracts && forge test            # WarrantRegistry (13) + WarrantAttestor (14) + WarrantReputation on a Fuji fork of the live ERC-8004 registries (5)
+cd contracts && forge test            # WarrantRegistry (13) + WarrantAttestor (14) + WarrantReputation on a Fuji fork of the live ERC-8004 registries (5) + the full stack on an Arc mainnet fork (1)
 cd ../rams && forge test               # the vendored ERC-8226 reference suite (105), unmodified
 ```
 
@@ -399,6 +424,11 @@ to the values written with `cast`, not to the plugin's own conversion code.
   ([`0xb3628760…8905`](https://testnet.monadvision.com/tx/0xb3628760504e15ec59a3276360c253d60a90b2314b3b6fffe63b80d7f7db8905)
   went through it). Because of the per-transaction approval, the unattended
   `scripts/demo-onchain.mjs` signs with a separate agent EOA instead.
+- **Fee load counts gas only when the quote prices it.** Since 2026-10-05 the network fee is added
+  to the fee load when it is paid in the coin being sold (USDC on Arc, the native coin when selling
+  it), valued at the quote's own sell-side rate; otherwise it is left out rather than guessed (a
+  quote from an empty wallet on Monad carries no network fee). The worst-case loss still covers
+  only the fill at `minDestAssetAmount`, not gas.
 - **Prices are off-chain inputs.** USD values come from the quote. An attestation proves what the
   agent was shown, not that the price data was correct.
 - **Scripted demos use synthetic quotes; the plugin has run on a real one.** `mm swap quote` works
@@ -414,8 +444,10 @@ to the values written with `cast`, not to the plugin's own conversion code.
   one tx, [`0x397aee33…7295`](https://testnet.monadvision.com/tx/0x397aee33947059aa23a82088254ea58a789e82b3ccd53b87cffe81c98dd97295),
   whose `SignedPreflightAttested` carries the quote hash `0xaffb6c2f…d016` and scorecard hash
   `0x2020c94f…91e1` that preflight printed, plus ERC-8004 feedback #3 for agent 1937.
-  No real swap has been executed yet: the warrants live on testnets, the swaps on mainnet.
-- Testnet only. Not audited.
+  No real swap has been executed yet (on Arc the warrant and the quote are both on mainnet; the
+  agent disclosed FAIL and did not trade).
+- **Mainnet, but not audited.** The Arc deployment is mainnet; Monad and Fuji are testnets. The
+  contracts hold no funds (they record warrants and disclosures only) and have not been audited.
 
 ## Pre-existing work and build window
 

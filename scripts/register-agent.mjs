@@ -1,10 +1,10 @@
 /**
  * Give the trading agent an ERC-8004 identity whose agentWallet is the mm wallet.
  *
- *   node scripts/register-agent.mjs <monad|fuji> register                 # mint the identity (operator key)
- *   node scripts/register-agent.mjs <monad|fuji> bind <agentId> [wallet]  # agentWallet := mm wallet
+ *   node scripts/register-agent.mjs <monad|fuji|arc> register                 # mint the identity (operator key)
+ *   node scripts/register-agent.mjs <monad|fuji|arc> bind <agentId> [wallet]  # agentWallet := mm wallet
  *
- * The operator (AGENT_PRIVATE_KEY in contracts/.env) owns the identity NFT and pays gas. `bind` asks
+ * The operator (AGENT_PRIVATE_KEY in contracts/.env; ARC_PRIVATE_KEY on Arc mainnet) owns the identity NFT and pays gas. `bind` asks
  * the active mm wallet to sign the registry's AgentWalletSet typed data (`mm wallet sign-typed-data`,
  * no transaction) and submits it; the registry accepts a new agentWallet only with that wallet's own
  * signature, and the deadline may be at most 5 minutes ahead, so both happen in one run.
@@ -16,11 +16,15 @@ import { join } from "node:path";
 import { createWalletClient, defineChain, http, parseEventLogs, publicActions } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 
-const IDENTITY = "0x8004A818BFB912233c491871b3d84c89A494BD9e";
-const REPUTATION_BRIDGE = "0x0FAf92b84f00201e888210B62ef5055Cc3BbefED";
+// ERC-8004 v2.0.0 IdentityRegistry and the Warrant contracts it is wired to, per network.
+const TESTNET = { identity: "0x8004A818BFB912233c491871b3d84c89A494BD9e", attestor: "0xC356ac5ebD7d249102D3C9c25764A8815c1718aA", bridge: "0x0FAf92b84f00201e888210B62ef5055Cc3BbefED", key: "AGENT_PRIVATE_KEY" };
 const NETS = {
-  monad: { id: 10143, rpc: "https://testnet-rpc.monad.xyz", tx: (h) => `https://testnet.monadvision.com/tx/${h}` },
-  fuji: { id: 43113, rpc: "https://api.avax-test.network/ext/bc/C/rpc", tx: (h) => `https://subnets-test.avax.network/c-chain/tx/${h}` },
+  monad: { ...TESTNET, id: 10143, rpc: "https://testnet-rpc.monad.xyz", tx: (h) => `https://testnet.monadvision.com/tx/${h}` },
+  fuji: { ...TESTNET, id: 43113, rpc: "https://api.avax-test.network/ext/bc/C/rpc", tx: (h) => `https://subnets-test.avax.network/c-chain/tx/${h}` },
+  arc: {
+    id: 5042, rpc: "https://rpc.mainnet.arc.io", tx: (h) => `https://explorer.arc.io/tx/${h}`, key: "ARC_PRIVATE_KEY",
+    identity: "0x8004A169FB4a3325136EB29fA0ceB6D2e539a432", attestor: "0x33B7B8db2927783dEbb58a589CF5c7B95824fae1", bridge: "0x30906fFDE26d87868B602D34DA96f2C0006e3962",
+  },
 };
 const ABI = [
   { type: "function", name: "register", stateMutability: "nonpayable", inputs: [{ name: "agentURI", type: "string" }], outputs: [{ type: "uint256" }] },
@@ -32,7 +36,7 @@ const ABI = [
 const [netName, cmd, idArg, walletArg] = process.argv.slice(2);
 const net = NETS[netName];
 if (!net || !["register", "bind"].includes(cmd)) {
-  console.error("usage: node scripts/register-agent.mjs <monad|fuji> register | bind <agentId> [wallet]");
+  console.error("usage: node scripts/register-agent.mjs <monad|fuji|arc> register | bind <agentId> [wallet]");
   process.exit(1);
 }
 const env = Object.fromEntries(
@@ -41,8 +45,9 @@ const env = Object.fromEntries(
     .filter((l) => l && !l.startsWith("#"))
     .map((l) => l.split("=", 2)),
 );
+const IDENTITY = net.identity;
 const chain = defineChain({ id: net.id, name: netName, nativeCurrency: { name: "", symbol: "", decimals: 18 }, rpcUrls: { default: { http: [net.rpc] } } });
-const client = createWalletClient({ account: privateKeyToAccount(env.AGENT_PRIVATE_KEY), chain, transport: http(net.rpc) }).extend(publicActions);
+const client = createWalletClient({ account: privateKeyToAccount(env[net.key]), chain, transport: http(net.rpc) }).extend(publicActions);
 const operator = client.account.address;
 
 // Run mm's entry point with node directly: on Windows `mm` is a .cmd shim, and going through a
@@ -67,7 +72,7 @@ if (cmd === "register") {
     x402Support: false,
     active: true,
     supportedTrust: ["reputation"],
-    warrant: { attestor: "0xC356ac5ebD7d249102D3C9c25764A8815c1718aA", reputationClient: REPUTATION_BRIDGE },
+    warrant: { attestor: net.attestor, reputationClient: net.bridge },
   };
   const uri = `data:application/json;base64,${Buffer.from(JSON.stringify(file)).toString("base64")}`;
   const hash = await client.writeContract({ address: IDENTITY, abi: ABI, functionName: "register", args: [uri] });
