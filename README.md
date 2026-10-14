@@ -12,6 +12,13 @@ can check what the agent was allowed to do, and prove it was told the trade was 
 
 **Demo videos:** Monad (2:31: real quote, mm-signed attestation, ERC-8004, audit) https://youtu.be/qOab45ZLuJg · Avalanche Fuji (2:44) https://youtu.be/yitnbGgzKOA · **Pitch deck (EN/中文):** [`docs/warrant-pitch.pdf`](docs/warrant-pitch.pdf)
 
+**New for ETH Shenzhen 2026: the agent no longer grades its own homework on price.** Every scorecard
+number used to come from the agent's own plugin. `WarrantPriceCheck` re-prices each signed disclosure
+on chain with **Chainlink Data Feeds**, and an agent that signs PASS on a quote the oracle puts out of
+bounds is recorded as **contradicted**, with an ERC-8004 reputation entry to match. Live on Arc mainnet;
+see [Chainlink price check](#chainlink-price-check-on-arc-mainnet-2026-10-14) and
+[what was built for this event](#pre-existing-work-and-build-window).
+
 > Renamed from "Mandate" on 2026-09-26 to avoid confusion with an unrelated project of the same
 > name. Contract, command and package names changed; nothing else did.
 
@@ -117,6 +124,79 @@ first deployment under the old name (`MandateRegistry`, `0xf0145a8b…1f48`), ke
 `WarrantAttestor` is also at the same address on both chains, pointing at the registry above:
 `0xC356ac5ebD7d249102D3C9c25764A8815c1718aA` (deploy txs: Monad `0xa65b871f…1a92`, Fuji
 `0x75d86fbf…a859`; records in `contracts/broadcast/DeployAttestor.s.sol/`).
+
+### Chainlink price check on Arc mainnet (2026-10-14)
+
+**The gap it closes.** A Warrant disclosure proves the agent *was shown* a scorecard, but every number
+on it (price impact, fees, output) came from the agent's own plugin and the quote it was handed. An agent
+that skips preflight, runs a modified plugin or is fed a bad quote can sign PASS on anything, and the
+chain had no independent way to say otherwise.
+
+**What `WarrantPriceCheck` does** ([`contracts/src/WarrantPriceCheck.sol`](contracts/src/WarrantPriceCheck.sol)):
+
+1. **The terms are bound by the agent's existing signature.** For a checkable disclosure, the
+   attestation's `quoteHash` is `keccak256(abi.encode(quoteIdHash, sellToken, buyToken, sellAmount,
+   buyAmount))`. A relayer cannot swap in friendlier amounts (`TermsMismatch`), and the agent needs no
+   second signature.
+2. **Chainlink prices the trade.** `fairOut` reads the sell and buy tokens' USD feeds
+   (`latestRoundData`), rejects a non-positive answer (`BadPrice`) or a stale one (`StaleFeed`: an
+   unpriceable quote must not be recorded as checked), and converts across token and feed decimals.
+3. **The shortfall is compared with the warrant.** `shortfallBps = (fairOut − quotedOut) / fairOut`
+   (0 when the quote beats the oracle) against the warrant's cost budget, `maxPriceImpactBps +
+   maxFeeBps`, plus a tolerance for oracle lag: a feed only updates when the price moves past its
+   deviation threshold, so the tolerance is the sum of both feeds' thresholds (0.5% + 0.5% = 100 bps).
+4. **The verdict is checked, not trusted.** Out of bounds and disclosed PASS = **contradicted**. The
+   contract only accepts disclosures `WarrantAttestor` already verified (agent signature, active warrant
+   version), each once. `checkAndRate` also posts ERC-8004 feedback from the contract itself: tag1
+   `warrant-oracle`, tag2 `consistent` (value +1) or `contradicted` (value −1).
+
+The plugin uses the same contract before the agent signs: `mm warrant preflight --price-check <addr>`
+adds an eighth dimension, **Chainlink price check**, which fails exactly where the contract would record
+a PASS as contradicted and warns inside the tolerance band. An honest agent therefore never gets
+contradicted; one that lies, or skips the plugin, does.
+
+| | Address / transaction (Arc mainnet, chain 5042) |
+|---|---|
+| `WarrantPriceCheck` | [`0xdF3fE689F0a3C74Ce299018cB573870769f04571`](https://explorer.arc.io/address/0xdF3fE689F0a3C74Ce299018cB573870769f04571), deployed in [`0xcc34e3d7…b956`](https://explorer.arc.io/tx/0xcc34e3d71a53601740356e95dc8c9ad2e347df5ab3de95c7c906e25fa629b956) (`contracts/script/DeployPriceCheckArc.s.sol`, 1,258,254 gas), wired to the deployed `WarrantAttestor` and Arc's ERC-8004 registries |
+| Chainlink feeds | USDC / USD [`0x84EA90AC…7905`](https://explorer.arc.io/address/0x84EA90AC252Dc437031461836DB5164219147905) for native USDC (18 decimals) · EURC / USD [`0x361b95c1…Bf23`](https://explorer.arc.io/address/0x361b95c10b76Ca3f35C686d423e43A951755Bf23) for EURC `0xbEf5f6d5…21c1` (6 decimals). Both: 8 decimals, 24 h heartbeat, 0.5% deviation threshold; max age set to 25 h |
+| Disclosure, relayed and rated | [`0x9c4a0ae8…02be`](https://explorer.arc.io/tx/0x9c4a0ae86adf85640b63ef094146a390334cf5057790634b4ddba69c732902be) (`WarrantReputation.submitAndRate`) |
+| Chainlink check, rated | [`0xfcceb21a…4117`](https://explorer.arc.io/tx/0xfcceb21ad86dbada766f40204c00eea4c83d82fa1a1b107879b850bc62a84117) (`WarrantPriceCheck.checkAndRate`) |
+
+**The live run.** A real `mm swap quote` on Arc (0.5 USDC → EURC via Uniswap, quote `0xc700a574…1a29`)
+went through `mm warrant preflight --registry … --attestor … --price-check 0xdF3f…4571`. Chainlink
+priced 0.5 USDC at **448,542** EURC base units; the quote offered **449,499**, so the price check passed
+(0 bps shortfall). The verdict was still **FAIL**, on fee load (gas was 199 bps of a $0.50 trade against
+a 50 bps limit), exactly as on 2026-10-05. The `mm` server wallet signed the FAIL disclosure
+(`quoteHash` = the terms hash `0xd8d15a0f…2b40`), and two relayed transactions recorded it, rated it
+`warrant-preflight / fail`, and had `WarrantPriceCheck` re-price it: `PriceChecked` logged fairOut
+448,542, quotedOut 449,499, shortfall 0, budget 200, out of bounds false, contradicted false. ERC-8004
+`getSummary(1419, [WarrantPriceCheck], "warrant-oracle", "consistent")` now returns 1. No swap was
+executed.
+
+**The case it exists for, on a fork.** `node scripts/demo-pricecheck.mjs` forks Arc mainnet and uses
+the contracts and live feeds deployed there. Two staged agents (throwaway keys, fork only) get an
+ERC-8004 identity and the same warrant, and both face the same bad quote, 5% below the Chainlink-fair
+output:
+
+```
+  fair 448542 vs quoted 426114 EURC base units
+  preflight: FAIL  Chainlink price check: 500bps below the Chainlink-fair output
+▶ honest agent signs FAIL …  PriceChecked: shortfall 500 bps, budget 200 bps, out of bounds true, contradicted false
+▶ liar agent signs PASS …    PriceChecked: shortfall 500 bps, budget 200 bps, out of bounds true, contradicted true
+  honest agentId 2436: consistent 1, contradicted 0
+  liar   agentId 2437: consistent 0, contradicted 1
+```
+
+The dishonest agent is staged, not observed: no agent has been caught lying on mainnet.
+
+#### Chainlink usage (files)
+
+| Chainlink product | Where | Role |
+|---|---|---|
+| Data Feeds (`AggregatorV3Interface`: `latestRoundData`, `decimals`) | [`contracts/src/WarrantPriceCheck.sol`](contracts/src/WarrantPriceCheck.sol) (`fairOut`, `_price`) | The independent price every PASS is checked against; staleness and non-positive answers revert |
+| Same feeds, read through the contract | [`src/lib/onchain.ts`](src/lib/onchain.ts) (`readOracleCheck`), [`src/lib/score.ts`](src/lib/score.ts) (`oracleDimension`), [`src/commands/warrant/preflight.ts`](src/commands/warrant/preflight.ts) (`--price-check`) | The agent sees the oracle's verdict before it signs |
+| Feed addresses and parameters | [`contracts/script/DeployPriceCheckArc.s.sol`](contracts/script/DeployPriceCheckArc.s.sol) | Arc mainnet USDC/USD and EURC/USD |
+| Tests against the live feeds | [`contracts/test/ArcPriceCheck.fork.t.sol`](contracts/test/ArcPriceCheck.fork.t.sol), [`test/pricecheck.test.mjs`](test/pricecheck.test.mjs) | Fair output recomputed from raw feed answers |
 
 ### Arc mainnet (2026-10-05)
 
@@ -312,6 +392,7 @@ Seven dimensions, each `pass` / `warn` / `fail` against the warrant:
 | Recipient is the wallet itself | `recipientMustBeSelf` |
 | Cross-chain route | `allowCrossChain` |
 | New ERC-20 approval | `allowNewApproval` |
+| Chainlink price check (with `--price-check`) | `maxPriceImpactBps + maxFeeBps`, against Chainlink Data Feeds |
 
 Plus a worst-case realised loss (slippage to `minDestAmount`) and a note when the trade would
 likely trip the wallet's native Guard Mode 2FA. If the on-chain warrant is missing, revoked or
@@ -397,10 +478,10 @@ a threshold.
 ## Tests
 
 ```bash
-npm test                              # scoring (14) + attestation builders (11) + audit (18) + on-chain integration on a local anvil (8) + ERC-8226 on anvil (8)
+npm test                              # scoring (14) + attestation builders (11) + audit (18) + on-chain integration on a local anvil (8) + ERC-8226 on anvil (8) + Chainlink price check, incl. an Arc mainnet fork (6)
 git clone --depth 1 https://github.com/foundry-rs/forge-std contracts/lib/forge-std   # once
 (cd rams && git clone --depth 1 --branch v5.4.0 https://github.com/OpenZeppelin/openzeppelin-contracts lib/openzeppelin-contracts && git clone --depth 1 https://github.com/foundry-rs/forge-std lib/forge-std)   # once, for the ERC-8226 test
-cd contracts && forge test            # WarrantRegistry (13) + WarrantAttestor (14) + WarrantReputation on a Fuji fork of the live ERC-8004 registries (5) + the full stack on an Arc mainnet fork (1)
+cd contracts && forge test            # WarrantRegistry (13) + WarrantAttestor (14) + WarrantReputation on a Fuji fork of the live ERC-8004 registries (5) + the full stack on an Arc mainnet fork (1) + WarrantPriceCheck (20) + WarrantPriceCheck on an Arc fork against the live Chainlink feeds (3)
 cd ../rams && forge test               # the vendored ERC-8226 reference suite (105), unmodified
 ```
 
@@ -429,8 +510,13 @@ to the values written with `cast`, not to the plugin's own conversion code.
   it), valued at the quote's own sell-side rate; otherwise it is left out rather than guessed (a
   quote from an empty wallet on Monad carries no network fee). The worst-case loss still covers
   only the fill at `minDestAssetAmount`, not gas.
-- **Prices are off-chain inputs.** USD values come from the quote. An attestation proves what the
-  agent was shown, not that the price data was correct.
+- **Prices are off-chain inputs, except where Chainlink checks them.** USD values in the scorecard
+  come from the quote. With `--price-check`, the quote's output is re-priced on chain against
+  Chainlink Data Feeds, with these limits: only tokens the contract has a feed for (on Arc: native
+  USDC and EURC); a 100 bps tolerance, so a shortfall inside the feeds' deviation thresholds is not
+  flagged; gas paid outside the quote is not in the output, so it is not counted (the fee-load
+  dimension covers it); and the check runs only when someone calls it. A disclosure nobody checked is
+  visible (no `PriceChecked` event for its digest) but not penalised.
 - **Scripted demos use synthetic quotes; the plugin has run on a real one.** `mm swap quote` works
   with an empty wallet: on 2026-09-27 a real Monad mainnet quote (1 MON → USDC, quote
   `0x13d2c3f1…e2f7`) went through the installed plugin, `mm warrant preflight --registry …
@@ -451,7 +537,7 @@ to the values written with `cast`, not to the plugin's own conversion code.
 
 ## Pre-existing work and build window
 
-Both hackathons allow a pre-existing foundation if it is disclosed. Timeline:
+The hackathons Warrant was entered in allow a pre-existing foundation if it is disclosed. Timeline:
 
 | Date | Work | Evidence |
 |---|---|---|
@@ -460,6 +546,8 @@ Both hackathons allow a pre-existing foundation if it is disclosed. Timeline:
 | 2026-09-25 → | Registry contract and tests, on-chain preflight (`src/lib/onchain.ts`), anvil integration test, deployments to Monad testnet and Fuji, live demo, agent skill, this README. | Commits from `b923d94` on |
 | 2026-09-26 | Renamed Mandate → Warrant; redeployed as `WarrantRegistry`. | This commit and later |
 | 2026-09-27 → 09-28 | Signed attestations (`WarrantAttestor`), ERC-8004 identity and reputation, audit, real `mm` quotes, ERC-8226 (RAMS) integration. | Commits and deployments listed above |
+| 2026-10-05 | Arc mainnet deployment; fee load counts the quote's network fee. | `9e87ccf`, `3ab44f8` |
+| 2026-10-14 → | **ETH Shenzhen 2026:** `WarrantPriceCheck` (Chainlink Data Feeds), its unit and Arc-fork tests, `--price-check` in the plugin, `checkAndRate` in the relayer, the Arc mainnet deployment and live run, `scripts/demo-pricecheck.mjs`. | Commits from `388053e` on |
 
 **Version control started late.** The repository was only put under git on 2026-09-25, so work from
 09-03 to 09-14 appears as one snapshot commit instead of its own history. No commit is backdated.
@@ -469,10 +557,16 @@ Both hackathons allow a pre-existing foundation if it is disclosed. Timeline:
 - **Avalanche Buildathon** (2026-09-14 → 09-30): the preflight plugin predates the window. The
   work done for this event is the on-chain layer: the contract, on-chain preflight, the Fuji
   deployment and the live demo.
+- **ETH Shenzhen 2026** (2026-09-30 → 10-23): Warrant was submitted to earlier hackathons (Monad
+  Metropolis, Avalanche Buildathon, Arc Microgrants, BLI Legal Tech Hackathon 2). The increment built
+  for this event is the Chainlink price check, listed in the row above: one new contract
+  (`WarrantPriceCheck.sol`), 23 new contract tests, 6 new plugin tests, the `--price-check` dimension,
+  the relayer step, a mainnet deployment and a fork demo. Everything else is the earlier work it
+  builds on.
 
 ## AI disclosure
 
-This project was built with AI coding tools, as both hackathons require to be disclosed:
+This project was built with AI coding tools, as the hackathons require to be disclosed:
 
 - **Claude Code** (Anthropic; Claude Opus models, Opus 5.5 for the work from 2026-09-25) wrote most
   of the code, tests, scripts and this README under the author's direction; commits it co-authored
