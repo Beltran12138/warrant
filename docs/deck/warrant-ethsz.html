@@ -1,0 +1,314 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Warrant — ETH Shenzhen 2026</title>
+<style>
+  @page { size: 1920px 1080px; margin: 0; }
+  :root {
+    --paper: #F6F4EF; --ink: #141414; --gray: #6E6A63; --rule: #D8D3C8;
+    --pass: #2E6A3B; --warn: #9A6400; --fail: #A1281F;
+    --en: 'Times New Roman', Times, serif;
+    --cn: 'FangSong', '仿宋', 'STFangsong', '华文仿宋', serif;
+    --mono: Consolas, 'JetBrains Mono', 'Courier New', monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { background: var(--paper); color: var(--ink); }
+  body { font-family: var(--en); -webkit-font-smoothing: antialiased; }
+  .slide { width: 1920px; height: 1080px; position: relative; overflow: hidden; padding: 96px 120px 0 120px; page-break-after: always; background: var(--paper); }
+  .rail { position: absolute; top: 44px; left: 120px; right: 120px; display: flex; justify-content: space-between; align-items: baseline;
+    font: 22px var(--en); color: var(--gray); letter-spacing: 0.04em; border-bottom: 1px solid var(--rule); padding-bottom: 14px; }
+  .rail b { color: var(--ink); font-weight: 700; letter-spacing: 0.12em; }
+  .rail .pg { font-family: var(--mono); font-size: 20px; }
+  .source { position: absolute; left: 120px; right: 120px; bottom: 44px; font: italic 19px var(--en); color: var(--gray); border-top: 1px solid var(--rule); padding-top: 12px; }
+  .source .cn { font-style: normal; font-family: var(--cn); }
+  h1 { font: 700 64px/1.08 var(--en); letter-spacing: -0.01em; margin-top: 40px; }
+  h1 + .cn-title { font: 38px/1.3 var(--cn); margin-top: 14px; }
+  .cn { font-family: var(--cn); }
+  .mono { font-family: var(--mono); }
+  .g { color: var(--gray); }
+
+  /* cover */
+  .cover { padding-top: 0; display: flex; flex-direction: column; justify-content: center; }
+  .cover .word { font: 700 200px/0.9 var(--en); letter-spacing: -0.03em; }
+  .cover .hook { font: italic 60px/1.15 var(--en); margin-top: 52px; }
+  .cover .hook-cn { font: 44px/1.3 var(--cn); margin-top: 16px; }
+  .cover .what { font: 32px/1.45 var(--en); color: var(--gray); margin-top: 52px; max-width: 1500px; }
+  .cover .what-cn { font: 30px/1.5 var(--cn); color: var(--gray); margin-top: 10px; max-width: 1500px; }
+  .cover .meta { position: absolute; left: 120px; right: 120px; bottom: 64px; display: flex; justify-content: space-between;
+    font: 24px var(--en); color: var(--gray); border-top: 1px solid var(--rule); padding-top: 18px; }
+  .cover .meta .mono { font-size: 22px; color: var(--ink); }
+
+  /* recap */
+  .steps { display: grid; grid-template-columns: repeat(5, 1fr); gap: 32px; margin-top: 64px; }
+  .step { border-top: 3px solid var(--ink); padding-top: 18px; }
+  .step .n { font: 700 26px var(--mono); color: var(--gray); }
+  .step .en { font: 700 32px/1.2 var(--en); margin-top: 8px; }
+  .step .zh { font: 25px/1.4 var(--cn); color: var(--gray); margin-top: 10px; }
+  .step .code { font: 21px/1.35 var(--mono); margin-top: 14px; color: #3A3833; }
+  .step.new { border-top-color: var(--fail); }
+  .step.new .n { color: var(--fail); }
+  .shipped { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0 56px; margin-top: 72px; }
+  .shipped > div { border-top: 1px solid var(--rule); padding-top: 18px; }
+  .shipped .k { font: 700 52px var(--mono); }
+  .shipped .l { font: 24px/1.35 var(--en); color: var(--gray); margin-top: 6px; }
+  .shipped .l .cn { display: block; }
+
+  /* gap */
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 80px; margin-top: 60px; align-items: start; }
+  .term { background: #1A1A18; color: #E9E6DE; padding: 28px 32px; font: 23px/1.6 var(--mono); }
+  .term > div { white-space: pre; }
+  .term .t { color: #9C978C; }
+  .term .ok { color: #7FBF8A; } .term .bad { color: #E07A6F; } .term .wn { color: #E0B25A; }
+  .term .hl { background: #3A2A12; }
+  .fails { list-style: none; }
+  .fails li { padding: 24px 0; border-bottom: 1px solid var(--rule); }
+  .fails li:first-child { padding-top: 0; }
+  .fails .en { font: 700 34px/1.22 var(--en); }
+  .fails .zh { font: 27px/1.4 var(--cn); color: var(--gray); margin-top: 8px; }
+
+  /* mechanism */
+  .mech { margin-top: 36px; }
+  table.v { width: 100%; border-collapse: collapse; margin-top: 30px; font-size: 28px; }
+  table.v th { font: 21px var(--en); letter-spacing: 0.1em; text-transform: uppercase; color: var(--gray); text-align: left; padding: 0 0 12px; border-bottom: 2px solid var(--ink); }
+  table.v td { padding: 16px 0; border-bottom: 1px solid var(--rule); vertical-align: baseline; }
+  table.v td.c { font-weight: 700; color: var(--pass); }
+  table.v td.x { font-weight: 700; color: var(--fail); }
+  table.v .cn { font-size: 23px; color: var(--gray); margin-left: 10px; }
+
+  /* live */
+  .live { display: grid; grid-template-columns: 0.5fr 1fr; gap: 72px; margin-top: 52px; }
+  .hero { font: 700 150px/0.95 var(--mono); letter-spacing: -0.03em; }
+  .hero small { font-size: 64px; color: var(--gray); }
+  .hero-cap { font: 30px/1.35 var(--en); margin-top: 22px; }
+  .hero-cap-cn { font: 27px/1.4 var(--cn); color: var(--gray); margin-top: 8px; }
+  table.tx { width: 100%; border-collapse: collapse; font-size: 25px; }
+  table.tx th { font: 20px var(--en); letter-spacing: 0.1em; text-transform: uppercase; color: var(--gray); text-align: left; padding: 0 0 12px; border-bottom: 2px solid var(--ink); }
+  table.tx td { padding: 14px 0; border-bottom: 1px solid var(--rule); vertical-align: baseline; }
+  table.tx td.h { font-family: var(--mono); font-size: 23px; white-space: nowrap; }
+  table.tx td.r { font-family: var(--mono); font-size: 23px; text-align: right; white-space: nowrap; }
+  table.tx .sub { display: block; font-size: 21px; color: var(--gray); }
+  .pill { display: inline-block; font: 700 20px var(--mono); padding: 2px 10px; border: 2px solid currentColor; }
+  .pill.c { color: var(--pass); } .pill.x { color: var(--fail); } .pill.f { color: var(--fail); }
+
+  /* liar */
+  .duo { display: grid; grid-template-columns: 1fr 1fr; gap: 40px; margin-top: 48px; }
+  .duo .term { min-height: 520px; }
+  .duo h3 { font: 700 34px var(--en); margin-bottom: 14px; }
+  .duo h3 .cn { font: 28px var(--cn); color: var(--gray); margin-left: 12px; font-weight: 400; }
+
+  /* close */
+  .close { display: grid; grid-template-columns: 1fr 0.8fr; gap: 90px; margin-top: 56px; }
+  .lims > div { padding: 20px 0; border-top: 1px solid var(--rule); }
+  .lims .en { font: 700 28px/1.25 var(--en); }
+  .lims .zh { font: 24px/1.4 var(--cn); color: var(--gray); margin-top: 6px; }
+  .ask .h { font: 21px var(--en); letter-spacing: 0.12em; text-transform: uppercase; color: var(--gray); margin-top: 30px; }
+  .ask .h:first-child { margin-top: 0; }
+  .ask .url { font: 700 38px/1.25 var(--en); margin-top: 10px; }
+  .ask .cmd { font: 24px/1.5 var(--mono); margin-top: 10px; background: #EDEAE2; padding: 14px 18px; }
+  .ask .p { font: 26px/1.45 var(--en); margin-top: 10px; }
+  .ask .p-cn { font: 24px/1.5 var(--cn); color: var(--gray); margin-top: 4px; }
+</style>
+</head>
+<body>
+
+<!-- 1 · Cover -->
+<section class="slide cover">
+  <div class="word">Warrant</div>
+  <div class="hook">Don't let the agent grade its own homework.</div>
+  <div class="hook-cn">别让 AI 代理给自己的作业打分。</div>
+  <div class="what">On-chain trade limits for AI agents, a signed pre-trade disclosure, and now an independent price check: Chainlink Data Feeds re-price every disclosure on chain, and an agent that signs PASS on a bad quote is caught and loses reputation.</div>
+  <div class="what-cn">链上交易授权 + 交易前签名披露 + 新增独立价格复核：Chainlink 在链上重算每一份披露，对坏报价签 PASS 的代理会被当场揭穿并扣信誉。</div>
+  <div class="meta">
+    <span>github.com/Beltran12138/warrant</span>
+    <span>Live on Arc mainnet · <span class="mono">WarrantPriceCheck 0xdF3f…4571</span></span>
+    <span>ETH Shenzhen 2026</span>
+  </div>
+</section>
+
+<!-- 2 · Recap -->
+<section class="slide">
+  <div class="rail"><b>WARRANT</b><span>What Warrant is · 项目回顾</span><span class="pg">02 / 07</span></div>
+  <h1>An AI agent's trading limits, on chain and checkable.</h1>
+  <div class="cn-title">把 AI 代理的交易边界放上链，让任何人都能核查。</div>
+  <div class="steps">
+    <div class="step"><div class="n">01</div><div class="en">Grant</div><div class="zh">授权人设定单笔上限、滑点、价格冲击、费用等，可随时撤销。</div><div class="code">WarrantRegistry</div></div>
+    <div class="step"><div class="n">02</div><div class="en">Preflight</div><div class="zh">代理下单前，按链上授权给真实报价打分。</div><div class="code">mm warrant preflight</div></div>
+    <div class="step"><div class="n">03</div><div class="en">Disclose</div><div class="zh">代理钱包签名打分结论，任何人可代为上链。</div><div class="code">EIP-712 → WarrantAttestor</div></div>
+    <div class="step"><div class="n">04</div><div class="en">Reputation</div><div class="zh">每份已验证的披露写成 ERC-8004 信誉记录。</div><div class="code">WarrantReputation</div></div>
+    <div class="step new"><div class="n">05 · NEW</div><div class="en">Price check</div><div class="zh">Chainlink 独立重算报价，核对代理说的是不是真话。</div><div class="code">WarrantPriceCheck</div></div>
+  </div>
+  <div class="shipped">
+    <div><div class="k">Arc</div><div class="l">mainnet, chain 5042<span class="cn">已上主网</span></div></div>
+    <div><div class="k">ERC-8004</div><div class="l">Arc's own registries, agent 1419<span class="cn">接入 Arc 官方注册表</span></div></div>
+    <div><div class="k">56 + 65</div><div class="l">contract + plugin tests, all passing<span class="cn">合约与插件测试全部通过</span></div></div>
+    <div><div class="k">MIT</div><div class="l">open source, every tx linked in README<span class="cn">开源，每笔交易可追溯</span></div></div>
+  </div>
+  <div class="source">Steps 01–04 were built before this event (Monad Metropolis, Avalanche Buildathon, Arc Microgrants); step 05 is the increment for ETH Shenzhen 2026. <span class="cn">01–04 为既有工作，05 为本届新增。</span></div>
+</section>
+
+<!-- 3 · The gap -->
+<section class="slide">
+  <div class="rail"><b>WARRANT</b><span>The gap · 缺口</span><span class="pg">03 / 07</span></div>
+  <h1>Every number on the scorecard came from the agent.</h1>
+  <div class="cn-title">打分卡上的每个数字，原本都由代理自己算。</div>
+  <div class="two">
+    <div class="term">
+      <div class="t">// what the agent signs (EIP-712)</div>
+      <div>PreflightAttestation {</div>
+      <div>  principal      0x3fd7…0f73</div>
+      <div>  agent          0x299e…0e0e</div>
+      <div class="hl">  quoteHash      keccak(quote id)</div>
+      <div>  warrantVersion 1</div>
+      <div class="hl">  verdict        PASS</div>
+      <div>  scorecardHash  0x…</div>
+      <div>}</div>
+      <br>
+      <div class="t">// checked on chain: signer = agent,</div>
+      <div class="t">// warrant active at that version.</div>
+      <div class="bad">// NOT checked: was PASS true?</div>
+    </div>
+    <ul class="fails">
+      <li><div class="en">A modified plugin can print PASS on anything.</div><div class="zh">插件被改过，任何报价都能显示 PASS。</div></li>
+      <li><div class="en">An agent can skip preflight and sign PASS anyway.</div><div class="zh">代理可以不打分，直接签 PASS。</div></li>
+      <li><div class="en">A bad quote can come with flattering price data.</div><div class="zh">坏报价也可能附带好看的价格数据。</div></li>
+      <li><div class="en">Until now, the chain could not tell.</div><div class="zh">此前，链上无从分辨。</div></li>
+    </ul>
+  </div>
+  <div class="source">Source: <span class="mono">contracts/src/WarrantAttestor.sol</span> (<span class="mono">submit</span> verifies the signer and the warrant version only).</div>
+</section>
+
+<!-- 4 · Mechanism -->
+<section class="slide">
+  <div class="rail"><b>WARRANT</b><span>WarrantPriceCheck · 价格复核合约</span><span class="pg">04 / 07</span></div>
+  <h1>Chainlink re-prices it. The contract checks the verdict.</h1>
+  <div class="cn-title">Chainlink 重算报价，合约核对代理的结论。</div>
+  <svg class="mech" width="1680" height="250" viewBox="0 0 1680 250" font-family="Times New Roman, serif">
+    <defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="10" markerHeight="10" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#141414"/></marker></defs>
+    <rect x="0" y="20" width="400" height="200" fill="none" stroke="#141414" stroke-width="2.5"/>
+    <text x="200" y="66" text-anchor="middle" font-size="30" font-weight="700">Signed disclosure</text>
+    <text x="200" y="104" text-anchor="middle" font-size="21" font-family="Consolas, monospace">quoteHash =</text>
+    <text x="200" y="134" text-anchor="middle" font-size="21" font-family="Consolas, monospace">keccak(tokens, amounts)</text>
+    <text x="200" y="180" text-anchor="middle" font-size="22" fill="#6E6A63" font-family="FangSong, serif">签名即锁定成交数量，中继者改不了</text>
+
+    <rect x="560" y="20" width="560" height="200" fill="#141414"/>
+    <text x="840" y="66" text-anchor="middle" font-size="30" font-weight="700" fill="#F6F4EF">WarrantPriceCheck</text>
+    <text x="840" y="108" text-anchor="middle" font-size="21" fill="#CFCAC0" font-family="Consolas, monospace">fair = sell × P(sell) / P(buy)</text>
+    <text x="840" y="140" text-anchor="middle" font-size="21" fill="#CFCAC0" font-family="Consolas, monospace">shortfall = (fair − quoted) / fair</text>
+    <text x="840" y="172" text-anchor="middle" font-size="21" fill="#CFCAC0" font-family="Consolas, monospace">vs impact + fee budget + 100 bps</text>
+
+    <rect x="1280" y="20" width="400" height="90" fill="none" stroke="#141414" stroke-width="2.5"/>
+    <text x="1480" y="58" text-anchor="middle" font-size="28" font-weight="700">Chainlink Data Feeds</text>
+    <text x="1480" y="90" text-anchor="middle" font-size="20" font-family="Consolas, monospace">USDC/USD · EURC/USD</text>
+    <rect x="1280" y="130" width="400" height="90" fill="none" stroke="#141414" stroke-width="2.5"/>
+    <text x="1480" y="168" text-anchor="middle" font-size="28" font-weight="700">ERC-8004 reputation</text>
+    <text x="1480" y="200" text-anchor="middle" font-size="20" font-family="Consolas, monospace">warrant-oracle ±1</text>
+
+    <line x1="400" y1="120" x2="552" y2="120" stroke="#141414" stroke-width="2.5" marker-end="url(#a)"/>
+    <text x="476" y="106" text-anchor="middle" font-size="20" font-family="Consolas, monospace">checkAndRate</text>
+    <line x1="1272" y1="65" x2="1128" y2="65" stroke="#141414" stroke-width="2.5" marker-end="url(#a)"/>
+    <text x="1200" y="50" text-anchor="middle" font-size="16" font-family="Consolas, monospace">latestRoundData</text>
+    <line x1="1120" y1="175" x2="1272" y2="175" stroke="#141414" stroke-width="2.5" marker-end="url(#a)"/>
+  </svg>
+  <table class="v">
+    <tr><th>Agent disclosed</th><th>Within budget</th><th>Over budget, inside oracle tolerance</th><th>Out of bounds</th></tr>
+    <tr><td>PASS<span class="cn">报通过</span></td><td class="c">consistent +1</td><td class="c">consistent +1 <span class="cn">(plugin warns)</span></td><td class="x">CONTRADICTED −1<span class="cn">说谎</span></td></tr>
+    <tr><td>WARN / FAIL<span class="cn">报警告/不通过</span></td><td class="c">consistent +1</td><td class="c">consistent +1</td><td class="c">consistent +1 <span class="cn">(it told the truth)</span></td></tr>
+  </table>
+  <div class="source">Stale feed (&gt; 25 h) or non-positive price → revert: an unpriceable quote is never recorded as checked. Tolerance 100 bps = the two feeds' 0.5% deviation thresholds. No admin; feeds fixed at deployment. <span class="cn">价格源过期即回滚，不记录。</span></div>
+</section>
+
+<!-- 5 · Live on Arc -->
+<section class="slide">
+  <div class="rail"><b>WARRANT</b><span>Live on Arc mainnet · 主网实跑</span><span class="pg">05 / 07</span></div>
+  <h1>A real quote, a real agent wallet, two Chainlink feeds.</h1>
+  <div class="cn-title">真实报价、真实代理钱包、两个 Chainlink 价格源。</div>
+  <div class="live">
+    <div>
+      <div class="hero">0<small> bps</small></div>
+      <div class="hero-cap">shortfall: Chainlink priced 0.5 USDC at 448,542 EURC units; the quote offered 449,499.</div>
+      <div class="hero-cap-cn">报价比 Chainlink 公允值还高，价格复核通过；总结论仍是 FAIL（gas 占 199 bps，上限 50）。</div>
+    </div>
+    <table class="tx">
+      <tr><th>Step</th><th>Transaction</th><th>Result</th></tr>
+      <tr><td>Deploy WarrantPriceCheck<span class="sub">1,258,254 gas</span></td><td class="h">0xcc34…b956</td><td class="r"><span class="pill c">status 1</span></td></tr>
+      <tr><td>mm wallet signs FAIL, relayed + rated<span class="sub">real <span class="mono">mm swap quote</span> 0xc700…1a29</span></td><td class="h">0x9c4a…02be</td><td class="r"><span class="pill f">preflight / fail</span></td></tr>
+      <tr><td>checkAndRate<span class="sub">fair 448,542 · quoted 449,499</span></td><td class="h">0xfcce…4117</td><td class="r"><span class="pill c">consistent</span></td></tr>
+      <tr><td>Staged dishonest agent signs PASS<span class="sub">quote 5% below Chainlink-fair</span></td><td class="h">0xbde8…8f4d</td><td class="r"><span class="pill x">contradicted</span></td></tr>
+    </table>
+  </div>
+  <div class="source">Source: receipts and <span class="mono">PriceChecked</span> events read from rpc.mainnet.arc.io, 2026-10-14. Feeds: USDC/USD <span class="mono">0x84EA…7905</span>, EURC/USD <span class="mono">0x361b…Bf23</span>. The dishonest agent is staged and labelled so in its ERC-8004 registration. No swap was executed.</div>
+</section>
+
+<!-- 6 · Honest vs liar -->
+<section class="slide">
+  <div class="rail"><b>WARRANT</b><span>Live demo · 现场演示</span><span class="pg">06 / 07</span></div>
+  <h1>Same bad quote. One agent tells the truth.</h1>
+  <div class="cn-title">同一笔坏报价，一个代理说真话，一个说谎。</div>
+  <div class="duo">
+    <div>
+      <h3>Honest agent<span class="cn">诚实代理</span></h3>
+      <div class="term">
+        <div class="t">$ mm warrant preflight --price-check …</div>
+        <div>fair     448542 EURC units</div>
+        <div>quoted   426114</div>
+        <div><span class="bad">✗</span> Chainlink price check</div>
+        <div>  500 bps below fair · limit 200 (+100)</div>
+        <br>
+        <div>signs <span class="bad">FAIL</span> → relayed → checkAndRate</div>
+        <div class="t">PriceChecked</div>
+        <div>  out of bounds   <span class="bad">true</span></div>
+        <div>  contradicted    <span class="ok">false</span></div>
+        <br>
+        <div>ERC-8004  consistent <span class="ok">1</span> · contradicted 0</div>
+      </div>
+    </div>
+    <div>
+      <h3>Dishonest agent<span class="cn">说谎代理</span></h3>
+      <div class="term">
+        <div class="t">$ # skips preflight</div>
+        <div>fair     448542 EURC units</div>
+        <div>quoted   426114</div>
+        <div class="t">  (never looked)</div>
+        <div> </div>
+        <br>
+        <div>signs <span class="ok">PASS</span> → relayed → checkAndRate</div>
+        <div class="t">PriceChecked</div>
+        <div>  out of bounds   <span class="bad">true</span></div>
+        <div>  contradicted    <span class="bad">true</span></div>
+        <br>
+        <div>ERC-8004  consistent 0 · contradicted <span class="bad">1</span></div>
+      </div>
+    </div>
+  </div>
+  <div class="source">Output of <span class="mono">node scripts/demo-pricecheck.mjs</span>: an Arc mainnet fork with the deployed contracts and live feeds; both agents and the quote are staged. <span class="cn">本地分叉 Arc 主网运行，零成本，可现场复现。</span></div>
+</section>
+
+<!-- 7 · Close -->
+<section class="slide">
+  <div class="rail"><b>WARRANT</b><span>Limits and try it · 局限与试用</span><span class="pg">07 / 07</span></div>
+  <h1>Reveal, not enforce. Now with a second opinion.</h1>
+  <div class="cn-title">只揭示，不拦截；现在多了一个独立的第二意见。</div>
+  <div class="close">
+    <div class="lims">
+      <div><div class="en">Only tokens with a feed are checkable (on Arc: USDC, EURC).</div><div class="zh">只能复核有 Chainlink 价格源的币种。</div></div>
+      <div><div class="en">A 100 bps tolerance absorbs oracle lag; smaller lies pass.</div><div class="zh">100 bps 容差吸收价格源滞后，更小的偏差不会被标记。</div></div>
+      <div><div class="en">The check runs when someone calls it; unchecked is visible, not penalised.</div><div class="zh">有人调用才复核；未复核可见，但不扣分。</div></div>
+      <div><div class="en">Gas outside the quote is not in the output; the fee-load check covers it.</div><div class="zh">报价外的 gas 不计入，由费用占比一项覆盖。</div></div>
+      <div><div class="en">Mainnet, not audited; the contracts hold no funds.</div><div class="zh">已上主网，未审计；合约不托管资金。</div></div>
+    </div>
+    <div class="ask">
+      <div class="h">Code · 代码</div>
+      <div class="url">github.com/Beltran12138/warrant</div>
+      <div class="h">Run the demo · 复现演示</div>
+      <div class="cmd">npm install &amp;&amp; npm run build<br>node scripts/demo-pricecheck.mjs</div>
+      <div class="h">Built for this event · 本届新增</div>
+      <div class="p">WarrantPriceCheck, 23 contract tests, 6 plugin tests, <span class="mono">--price-check</span>, relayer step, Arc mainnet deployment.</div>
+      <div class="p-cn">独立开发，使用 AI 编程工具，已在 README 披露。</div>
+    </div>
+  </div>
+  <div class="source">Chainlink usage, files and transactions: README › Chainlink price check on Arc mainnet. <span class="cn">Chainlink 用到的文件与交易清单见 README。</span></div>
+</section>
+
+</body>
+</html>

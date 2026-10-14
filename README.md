@@ -161,6 +161,7 @@ contradicted; one that lies, or skips the plugin, does.
 | Chainlink feeds | USDC / USD [`0x84EA90AC…7905`](https://explorer.arc.io/address/0x84EA90AC252Dc437031461836DB5164219147905) for native USDC (18 decimals) · EURC / USD [`0x361b95c1…Bf23`](https://explorer.arc.io/address/0x361b95c10b76Ca3f35C686d423e43A951755Bf23) for EURC `0xbEf5f6d5…21c1` (6 decimals). Both: 8 decimals, 24 h heartbeat, 0.5% deviation threshold; max age set to 25 h |
 | Disclosure, relayed and rated | [`0x9c4a0ae8…02be`](https://explorer.arc.io/tx/0x9c4a0ae86adf85640b63ef094146a390334cf5057790634b4ddba69c732902be) (`WarrantReputation.submitAndRate`) |
 | Chainlink check, rated | [`0xfcceb21a…4117`](https://explorer.arc.io/tx/0xfcceb21ad86dbada766f40204c00eea4c83d82fa1a1b107879b850bc62a84117) (`WarrantPriceCheck.checkAndRate`) |
+| Staged dishonest agent, caught | agentId **2437**, agentWallet `0x8F31FaFc…957B` (throwaway key; [register](https://explorer.arc.io/tx/0x0a6054895b40f8ad9bbe2f064b8198de7468475161ad8b5eea07cf43f9227aae), [bind](https://explorer.arc.io/tx/0xb1ed106bcc07485dcf404bd23db05ce2d6ae91fa36f3863b30b90e7a012181da), [warrant](https://explorer.arc.io/tx/0xe478ee1c238ac11b2970046cb20c0aa8ecc6b3a7df91917a7ccdae11ad8f497e)); PASS relayed [`0xd6f22c09…b8af`](https://explorer.arc.io/tx/0xd6f22c09904d09c91bea914efdf5a438f278baaad71411af3cbbb50cd79eb8af); **contradicted** [`0xbde80bd4…8f4d`](https://explorer.arc.io/tx/0xbde80bd4ef702fd7bb6ad3d3d7df63d22bcc7a92cfe90f8971dde4503bb98f4d) (`scripts/stage-liar-arc.mjs`) |
 
 **The live run.** A real `mm swap quote` on Arc (0.5 USDC → EURC via Uniswap, quote `0xc700a574…1a29`)
 went through `mm warrant preflight --registry … --attestor … --price-check 0xdF3f…4571`. Chainlink
@@ -187,7 +188,14 @@ output:
   liar   agentId 2437: consistent 0, contradicted 1
 ```
 
-The dishonest agent is staged, not observed: no agent has been caught lying on mainnet.
+**The same case on Arc mainnet.** `scripts/stage-liar-arc.mjs` staged it for real: a throwaway agent
+key, an ERC-8004 identity whose registration says it is a staged dishonest agent (agentId 2437), the
+same warrant the `mm` wallet holds, and a staged quote 5% below what Chainlink said 0.5 USDC buys. The
+agent signed PASS without running preflight; the disclosure was relayed and rated like any other, and
+`checkAndRate` logged fairOut 448,542, quotedOut 426,114, shortfall 500 bps, budget 200 bps, out of
+bounds true, **contradicted true**. `getSummary(2437, [WarrantPriceCheck], "warrant-oracle",
+"contradicted")` returns count 1, value −1. The dishonest agent and its quote are staged, not observed:
+no real trading agent has been caught lying.
 
 #### Chainlink usage (files)
 
@@ -547,7 +555,7 @@ The hackathons Warrant was entered in allow a pre-existing foundation if it is d
 | 2026-09-26 | Renamed Mandate → Warrant; redeployed as `WarrantRegistry`. | This commit and later |
 | 2026-09-27 → 09-28 | Signed attestations (`WarrantAttestor`), ERC-8004 identity and reputation, audit, real `mm` quotes, ERC-8226 (RAMS) integration. | Commits and deployments listed above |
 | 2026-10-05 | Arc mainnet deployment; fee load counts the quote's network fee. | `9e87ccf`, `3ab44f8` |
-| 2026-10-14 → | **ETH Shenzhen 2026:** `WarrantPriceCheck` (Chainlink Data Feeds), its unit and Arc-fork tests, `--price-check` in the plugin, `checkAndRate` in the relayer, the Arc mainnet deployment and live run, `scripts/demo-pricecheck.mjs`. | Commits from `388053e` on |
+| 2026-10-14 → | **ETH Shenzhen 2026:** `WarrantPriceCheck` (Chainlink Data Feeds), its unit and Arc-fork tests, `--price-check` in the plugin, `checkAndRate` in the relayer, the Arc mainnet deployment and live run, `scripts/demo-pricecheck.mjs`, `scripts/stage-liar-arc.mjs`, the ETH Shenzhen deck (`docs/warrant-ethsz.pdf`). | Commits from `388053e` on |
 
 **Version control started late.** The repository was only put under git on 2026-09-25, so work from
 09-03 to 09-14 appears as one snapshot commit instead of its own history. No commit is backdated.
@@ -561,7 +569,7 @@ The hackathons Warrant was entered in allow a pre-existing foundation if it is d
   Metropolis, Avalanche Buildathon, Arc Microgrants, BLI Legal Tech Hackathon 2). The increment built
   for this event is the Chainlink price check, listed in the row above: one new contract
   (`WarrantPriceCheck.sol`), 23 new contract tests, 6 new plugin tests, the `--price-check` dimension,
-  the relayer step, a mainnet deployment and a fork demo. Everything else is the earlier work it
+  the relayer step, a mainnet deployment with an honest live run and a staged dishonest agent, and a fork demo. Everything else is the earlier work it
   builds on.
 
 ## AI disclosure
