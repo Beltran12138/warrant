@@ -15,6 +15,7 @@ import {
   type Scorecard,
   scoreSwap,
   ramsDimension,
+  oracleDimension,
   withDimension,
   networkFeeUsd,
 } from "../../lib/score.js";
@@ -28,13 +29,16 @@ import {
   mmSendTransaction,
   mmSignTypedDataCommand,
   quoteHash,
+  type QuoteTerms,
+  quoteTermsHash,
   readOnchainWarrant,
+  readOracleCheck,
   readRamsCheck,
   scoreAgainstOnchain,
   scorecardHash,
   VERDICT_INDEX,
 } from "../../lib/onchain.js";
-import type { Address } from "viem";
+import { keccak256, stringToHex, type Address } from "viem";
 
 const inputs = {
   quoteId: {
@@ -87,6 +91,13 @@ const inputs = {
     required: false,
     prompt: false,
   },
+  priceCheck: {
+    type: InputFieldType.Text,
+    flag: "price-check",
+    message: "WarrantPriceCheck address — price the quote against Chainlink Data Feeds and bind its amounts to the attestation (with --registry, same RPC)",
+    required: false,
+    prompt: false,
+  },
   rpcUrl: {
     type: InputFieldType.Text,
     flag: "rpc-url",
@@ -109,7 +120,15 @@ type Attestation = {
   /** The same attestation as an `mm wallet send-transaction` call, signed by the mm wallet itself. */
   mm: MmSendTransaction;
   /** With --attestor: sign this off-chain (no transaction), then anyone submits it to WarrantAttestor. */
-  signed?: { attestor: string; typedData: AttestationTypedData; command: string };
+  signed?: { attestor: string; typedData: AttestationTypedData; command: string; priceCheck?: PriceCheckRef };
+  /** With --price-check: quoteHash is the hash of these terms, so WarrantPriceCheck can re-price them. */
+  priceCheck?: PriceCheckRef;
+};
+
+/** What a relayer needs to call WarrantPriceCheck.checkAndRate; amounts as decimal strings. */
+type PriceCheckRef = {
+  address: string;
+  terms: { quoteIdHash: string; sellToken: string; buyToken: string; sellAmount: string; buyAmount: string };
 };
 
 type PreflightResult = {
@@ -155,7 +174,8 @@ export default class WarrantPreflight extends PluginCommand<PreflightResult> {
   protected readonly pluginCommandId = "warrant:preflight";
 
   async execute(io: CommandIO): Promise<PreflightResult> {
-    const { quoteId, warrantFile, registry, principal, agent, attestor, rams, rpcUrl } = await io.resolveInputs(inputs);
+    const { quoteId, warrantFile, registry, principal, agent, attestor, rams, priceCheck, rpcUrl } =
+      await io.resolveInputs(inputs);
     const { spec, source } = loadWarrant(process.cwd(), warrantFile || "warrant.json");
 
     const store = this.ctx.swapQuoteStore;
@@ -224,12 +244,17 @@ export default class WarrantPreflight extends PluginCommand<PreflightResult> {
 
     let scorecard = scoreAgainstOnchain(swap, onchain);
     if (rams?.trim()) scorecard = await this.addRams(scorecard, swap, rams.trim() as Address, rpcUrl.trim(), agentAddr, principal.trim() as Address);
+    let terms: QuoteTerms | undefined;
+    if (priceCheck?.trim()) {
+      terms = this.quoteTerms(targetId, loaded);
+      scorecard = await this.addOracle(scorecard, terms, priceCheck.trim() as Address, rpcUrl.trim(), onchain.spec);
+    }
     let attestation: Attestation | undefined;
     if (onchain.active) {
       const args = {
         registry: registry.trim() as Address,
         principal: principal.trim() as Address,
-        quoteHash: quoteHash(targetId),
+        quoteHash: terms ? quoteTermsHash(terms) : quoteHash(targetId),
         warrantVersion: onchain.version,
         verdict: VERDICT_INDEX[scorecard.verdict],
         scorecardHash: scorecardHash(scorecard),
@@ -244,9 +269,26 @@ export default class WarrantPreflight extends PluginCommand<PreflightResult> {
         agent: agentAddr,
         mm: mmSendTransaction(args, onchain.chainId, gasPrice),
       };
+      if (terms && priceCheck) {
+        attestation.priceCheck = {
+          address: priceCheck.trim(),
+          terms: {
+            quoteIdHash: terms.quoteIdHash,
+            sellToken: terms.sellToken,
+            buyToken: terms.buyToken,
+            sellAmount: terms.sellAmount.toString(),
+            buyAmount: terms.buyAmount.toString(),
+          },
+        };
+      }
       if (attestor?.trim()) {
         const typedData = attestationTypedData(args, agentAddr, onchain.chainId, attestor.trim() as Address);
-        attestation.signed = { attestor: attestor.trim(), typedData, command: mmSignTypedDataCommand(typedData) };
+        attestation.signed = {
+          attestor: attestor.trim(),
+          typedData,
+          command: mmSignTypedDataCommand(typedData),
+          priceCheck: attestation.priceCheck,
+        };
       }
     }
     return {
@@ -283,6 +325,54 @@ export default class WarrantPreflight extends PluginCommand<PreflightResult> {
         observed: "could not evaluate",
         limit: `mandate in RAMS ${registry}`,
         note: `registry call failed: ${(e as Error).message.split("\n")[0]}`,
+      });
+    }
+  }
+
+  /** The quote's tokens and base-unit amounts, as WarrantPriceCheck.QuoteTerms. Throws if the quote lacks them. */
+  private quoteTerms(quoteId: string, loaded: unknown): QuoteTerms {
+    const q = (loaded as {
+      result?: {
+        quote?: {
+          srcAsset?: { address?: string };
+          destAsset?: { address?: string };
+          srcAssetAmount?: string;
+          destAssetAmount?: string;
+        };
+      };
+    }).result?.quote;
+    const sellToken = q?.srcAsset?.address;
+    const buyToken = q?.destAsset?.address;
+    if (!sellToken || !buyToken || !q?.srcAssetAmount || !q?.destAssetAmount) {
+      throw new Error("--price-check: the quote has no token addresses or base-unit amounts");
+    }
+    return {
+      quoteIdHash: keccak256(stringToHex(quoteId)),
+      sellToken: sellToken as Address,
+      buyToken: buyToken as Address,
+      sellAmount: BigInt(q.srcAssetAmount),
+      buyAmount: BigInt(q.destAssetAmount),
+    };
+  }
+
+  /** Fold the Chainlink price check into the scorecard; an unpriceable quote is a warn, never a silent pass. */
+  private async addOracle(
+    sc: Scorecard,
+    terms: QuoteTerms,
+    priceCheck: Address,
+    rpcUrl: string,
+    spec: Parameters<typeof readOracleCheck>[0]["spec"],
+  ): Promise<Scorecard> {
+    try {
+      return withDimension(sc, oracleDimension(await readOracleCheck({ rpcUrl, priceCheck, terms, spec })));
+    } catch (e) {
+      return withDimension(sc, {
+        key: "oraclePrice",
+        label: "Chainlink price check",
+        severity: "warn",
+        observed: "could not evaluate",
+        limit: `price check ${priceCheck}`,
+        note: `fairOut call failed (stale or missing feed?): ${(e as Error).message.split("\n")[0]}`,
       });
     }
   }

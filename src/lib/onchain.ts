@@ -1,5 +1,6 @@
 import {
   createPublicClient,
+  encodeAbiParameters,
   encodeFunctionData,
   http,
   keccak256,
@@ -10,7 +11,7 @@ import {
   type Address,
   type Hex,
 } from "viem";
-import { scoreSwap, type RamsCheck, type WarrantSpec, type ProposedSwap, type Scorecard, type Severity } from "./score.js";
+import { scoreSwap, type OracleCheck, type RamsCheck, type WarrantSpec, type ProposedSwap, type Scorecard, type Severity } from "./score.js";
 
 /** Minimal ABI slice of contracts/src/WarrantRegistry.sol used by the plugin. */
 export const WARRANT_REGISTRY_ABI = [
@@ -189,6 +190,105 @@ export async function readRamsCheck(opts: {
 export const VERDICT_INDEX: Record<Severity, number> = { pass: 0, warn: 1, fail: 2 };
 
 export const quoteHash = (quoteId: string): Hex => keccak256(stringToHex(quoteId));
+
+/** WarrantPriceCheck.QuoteTerms (contracts/src/WarrantPriceCheck.sol). Amounts in base units. */
+export interface QuoteTerms {
+  quoteIdHash: Hex;
+  sellToken: Address;
+  buyToken: Address;
+  sellAmount: bigint;
+  buyAmount: bigint;
+}
+
+export const QUOTE_TERMS_COMPONENTS = [
+  { name: "quoteIdHash", type: "bytes32" },
+  { name: "sellToken", type: "address" },
+  { name: "buyToken", type: "address" },
+  { name: "sellAmount", type: "uint256" },
+  { name: "buyAmount", type: "uint256" },
+] as const;
+
+/**
+ * The quoteHash of a price-checkable attestation: keccak256(abi.encode(terms)), as
+ * WarrantPriceCheck.termsHash computes it. Signing it binds the amounts to the agent's signature.
+ */
+export const quoteTermsHash = (t: QuoteTerms): Hex =>
+  keccak256(
+    encodeAbiParameters(QUOTE_TERMS_COMPONENTS, [t.quoteIdHash, t.sellToken, t.buyToken, t.sellAmount, t.buyAmount]),
+  );
+
+export const PRICE_CHECK_ABI = [
+  {
+    type: "function",
+    name: "fairOut",
+    stateMutability: "view",
+    inputs: [
+      { name: "sellToken", type: "address" },
+      { name: "buyToken", type: "address" },
+      { name: "sellAmount", type: "uint256" },
+    ],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  { type: "function", name: "toleranceBps", stateMutability: "view", inputs: [], outputs: [{ name: "", type: "uint16" }] },
+  {
+    type: "function",
+    name: "termsHash",
+    stateMutability: "pure",
+    inputs: [{ name: "t", type: "tuple", components: QUOTE_TERMS_COMPONENTS }],
+    outputs: [{ name: "", type: "bytes32" }],
+  },
+  {
+    type: "function",
+    name: "checkAndRate",
+    stateMutability: "nonpayable",
+    inputs: [
+      {
+        name: "a",
+        type: "tuple",
+        components: [
+          { name: "principal", type: "address" },
+          { name: "agent", type: "address" },
+          { name: "quoteHash", type: "bytes32" },
+          { name: "warrantVersion", type: "uint32" },
+          { name: "verdict", type: "uint8" },
+          { name: "scorecardHash", type: "bytes32" },
+        ],
+      },
+      { name: "t", type: "tuple", components: QUOTE_TERMS_COMPONENTS },
+      { name: "agentId", type: "uint256" },
+    ],
+    outputs: [
+      { name: "d", type: "bytes32" },
+      { name: "contradicted", type: "bool" },
+    ],
+  },
+] as const;
+
+/** Ask WarrantPriceCheck for the oracle-fair output of these terms (reverts if a feed is stale or missing). */
+export async function readOracleCheck(opts: {
+  rpcUrl: string;
+  priceCheck: Address;
+  terms: QuoteTerms;
+  spec: WarrantSpec;
+}): Promise<OracleCheck> {
+  const client = createPublicClient({ transport: http(opts.rpcUrl) });
+  const [fairOut, toleranceBps] = await Promise.all([
+    client.readContract({
+      address: opts.priceCheck,
+      abi: PRICE_CHECK_ABI,
+      functionName: "fairOut",
+      args: [opts.terms.sellToken, opts.terms.buyToken, opts.terms.sellAmount],
+    }),
+    client.readContract({ address: opts.priceCheck, abi: PRICE_CHECK_ABI, functionName: "toleranceBps" }),
+  ]);
+  return {
+    contract: opts.priceCheck,
+    fairOut,
+    quotedOut: opts.terms.buyAmount,
+    budgetBps: opts.spec.maxPriceImpactBps + opts.spec.maxFeeBps,
+    toleranceBps,
+  };
+}
 
 /** keccak256 of the scorecard serialised with sorted keys, so the same scorecard always hashes the same. */
 export function scorecardHash(sc: Scorecard): Hex {

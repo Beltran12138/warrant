@@ -319,6 +319,45 @@ export function ramsDimension(c: RamsCheck): Dimension {
   };
 }
 
+/** The quote priced by WarrantPriceCheck against Chainlink Data Feeds (contracts/src/WarrantPriceCheck.sol). */
+export interface OracleCheck {
+  contract: string;
+  /** Oracle-fair output and quoted output, in the bought token's base units. */
+  fairOut: bigint;
+  quotedOut: bigint;
+  /** The warrant's cost budget: maxPriceImpactBps + maxFeeBps. */
+  budgetBps: number;
+  /** Allowance for oracle lag, from the contract. */
+  toleranceBps: number;
+}
+
+/** How far the quoted output falls short of the oracle-fair output, in bps; 0 if the quote beats the oracle. Same integer math as the contract. */
+export const shortfallBps = (fairOut: bigint, quotedOut: bigint): number =>
+  fairOut > quotedOut ? Number(((fairOut - quotedOut) * 10_000n) / fairOut) : 0;
+
+/**
+ * The on-chain price check as a scorecard dimension. Fail exactly where WarrantPriceCheck would record a
+ * PASS as contradicted (shortfall > budget + tolerance); warn inside the tolerance band, where the
+ * oracle's own lag could explain the gap.
+ */
+export function oracleDimension(c: OracleCheck): Dimension {
+  const s = shortfallBps(c.fairOut, c.quotedOut);
+  const severity: Severity = s > c.budgetBps + c.toleranceBps ? "fail" : s > c.budgetBps ? "warn" : "pass";
+  return {
+    key: "oraclePrice",
+    label: "Chainlink price check",
+    severity,
+    observed: `${s}bps below the Chainlink-fair output (${c.quotedOut} vs ${c.fairOut} base units)`,
+    limit: `≤ ${c.budgetBps}bps price impact + fees (+${c.toleranceBps}bps oracle tolerance)`,
+    note:
+      severity === "fail"
+        ? `WarrantPriceCheck ${c.contract} would record a PASS on this quote as contradicted`
+        : severity === "warn"
+          ? "over the cost budget, but within the feeds' deviation threshold"
+          : "the quote is within the warrant's cost budget at Chainlink prices",
+  };
+}
+
 /** Add a dimension to a scored card; the verdict can only get worse. */
 export function withDimension(sc: Scorecard, d: Dimension): Scorecard {
   return { ...sc, verdict: worst([sc.verdict, d.severity]), dimensions: [...sc.dimensions, d] };

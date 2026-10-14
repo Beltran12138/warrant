@@ -7,7 +7,11 @@
  * reputation entry for the agent (the agentId's agentWallet must be the signing agent). If the
  * attestation is already on-chain, that path still works and only adds the reputation entry.
  *
- * <typed-data.json> is `attestation.signed.typedData` from `mm warrant preflight --attestor … --json`;
+ * <typed-data.json> is `attestation.signed.typedData` from `mm warrant preflight --attestor … --json`, or the
+ * whole `attestation.signed` object. With `--price-check`, that object also carries `priceCheck`, and with an
+ * agentId the relayer then calls WarrantPriceCheck.checkAndRate: the quote is re-priced against Chainlink
+ * Data Feeds on chain and the agent gets a "warrant-oracle" feedback entry ("consistent" or "contradicted").
+ *
  * <signature> is `data.signature` from `mm wallet sign-typed-data … --json`. The chain and the
  * attestor come from the typed data's domain. Any funded key can relay: RELAYER_PRIVATE_KEY, else
  * DEPLOYER_PRIVATE_KEY from contracts/.env (ARC_PRIVATE_KEY on Arc mainnet). The relayer is recorded as `submitter`, never trusted.
@@ -16,7 +20,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { createWalletClient, defineChain, http, publicActions, recoverTypedDataAddress } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { WARRANT_ATTESTOR_ABI } from "../dist/lib/onchain.js";
+import { PRICE_CHECK_ABI, WARRANT_ATTESTOR_ABI } from "../dist/lib/onchain.js";
 
 // WarrantReputation per chain (wired to that chain's attestor and ERC-8004 registries).
 const REPUTATION_BRIDGE = {
@@ -46,7 +50,9 @@ if (!file || !signature) {
   console.error("usage: node scripts/submit-signed.mjs <typed-data.json> <signature> [agentId]");
   process.exit(1);
 }
-const td = JSON.parse(readFileSync(file, "utf8"));
+const input = JSON.parse(readFileSync(file, "utf8"));
+const td = input.typedData ?? input;
+const priceCheck = input.priceCheck;
 const chainId = Number(td.domain.chainId);
 const rpcUrl = process.env.RPC_URL ?? RPC[chainId];
 if (!rpcUrl) throw new Error(`no RPC for chain ${chainId}; set RPC_URL`);
@@ -76,3 +82,16 @@ const hash = agentId
 const r = await client.waitForTransactionReceipt({ hash });
 console.log(`${r.status}: agent ${m.agent} attestation relayed by ${client.account.address}${agentId ? ` and rated on ERC-8004 agent ${agentId}` : ""}\n  ${TX[chainId]?.(hash) ?? hash}`);
 if (r.status !== "success") process.exit(1);
+
+if (priceCheck && agentId) {
+  const p = priceCheck.terms;
+  const terms = { ...p, sellAmount: BigInt(p.sellAmount), buyAmount: BigInt(p.buyAmount) };
+  const call = { address: priceCheck.address, abi: PRICE_CHECK_ABI, functionName: "checkAndRate", args: [a, terms, BigInt(agentId)] };
+  const { result } = await client.simulateContract({ ...call, account: client.account });
+  const h2 = await client.writeContract(call);
+  const r2 = await client.waitForTransactionReceipt({ hash: h2 });
+  console.log(
+    `${r2.status}: Chainlink price check ${result[1] ? "CONTRADICTED the agent's PASS" : "is consistent with the disclosure"} (WarrantPriceCheck ${priceCheck.address})\n  ${TX[chainId]?.(h2) ?? h2}`,
+  );
+  if (r2.status !== "success") process.exit(1);
+}
