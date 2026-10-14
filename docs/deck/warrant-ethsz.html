@@ -128,7 +128,7 @@
 
 <!-- 2 · Recap -->
 <section class="slide">
-  <div class="rail"><b>WARRANT</b><span>What Warrant is · 项目回顾</span><span class="pg">02 / 07</span></div>
+  <div class="rail"><b>WARRANT</b><span>What Warrant is · 项目回顾</span><span class="pg">02 / 08</span></div>
   <h1>An AI agent's trading limits, on chain and checkable.</h1>
   <div class="cn-title">把 AI 代理的交易边界放上链，让任何人都能核查。</div>
   <div class="steps">
@@ -141,7 +141,7 @@
   <div class="shipped">
     <div><div class="k">Arc</div><div class="l">mainnet, chain 5042<span class="cn">已上主网</span></div></div>
     <div><div class="k">ERC-8004</div><div class="l">Arc's own registries, agent 1419<span class="cn">接入 Arc 官方注册表</span></div></div>
-    <div><div class="k">56 + 65</div><div class="l">contract + plugin tests, all passing<span class="cn">合约与插件测试全部通过</span></div></div>
+    <div><div class="k">78 + 65</div><div class="l">contract + plugin tests, all passing<span class="cn">合约与插件测试全部通过</span></div></div>
     <div><div class="k">MIT</div><div class="l">open source, every tx linked in README<span class="cn">开源，每笔交易可追溯</span></div></div>
   </div>
   <div class="source">Steps 01–04 were built before this event (Monad Metropolis, Avalanche Buildathon, Arc Microgrants); step 05 is the increment for ETH Shenzhen 2026. <span class="cn">01–04 为既有工作，05 为本届新增。</span></div>
@@ -149,7 +149,7 @@
 
 <!-- 3 · The gap -->
 <section class="slide">
-  <div class="rail"><b>WARRANT</b><span>The gap · 缺口</span><span class="pg">03 / 07</span></div>
+  <div class="rail"><b>WARRANT</b><span>The gap · 缺口</span><span class="pg">03 / 08</span></div>
   <h1>Every number on the scorecard came from the agent.</h1>
   <div class="cn-title">打分卡上的每个数字，原本都由代理自己算。</div>
   <div class="two">
@@ -180,7 +180,7 @@
 
 <!-- 4 · Mechanism -->
 <section class="slide">
-  <div class="rail"><b>WARRANT</b><span>WarrantPriceCheck · 价格复核合约</span><span class="pg">04 / 07</span></div>
+  <div class="rail"><b>WARRANT</b><span>WarrantPriceCheck · 价格复核合约</span><span class="pg">04 / 08</span></div>
   <h1>Chainlink re-prices it. The contract checks the verdict.</h1>
   <div class="cn-title">Chainlink 重算报价，合约核对代理的结论。</div>
   <svg class="mech" width="1680" height="250" viewBox="0 0 1680 250" font-family="Times New Roman, serif">
@@ -220,7 +220,7 @@
 
 <!-- 5 · Live on Arc -->
 <section class="slide">
-  <div class="rail"><b>WARRANT</b><span>Live on Arc mainnet · 主网实跑</span><span class="pg">05 / 07</span></div>
+  <div class="rail"><b>WARRANT</b><span>Live on Arc mainnet · 主网实跑</span><span class="pg">05 / 08</span></div>
   <h1>A real quote, a real agent wallet, two Chainlink feeds.</h1>
   <div class="cn-title">真实报价、真实代理钱包、两个 Chainlink 价格源。</div>
   <div class="live">
@@ -240,9 +240,33 @@
   <div class="source">Source: receipts and <span class="mono">PriceChecked</span> events read from rpc.mainnet.arc.io, 2026-10-14. Feeds: USDC/USD <span class="mono">0x84EA…7905</span>, EURC/USD <span class="mono">0x361b…Bf23</span>. The dishonest agent is staged and labelled so in its ERC-8004 registration. No swap was executed.</div>
 </section>
 
-<!-- 6 · Honest vs liar -->
+
+<!-- 6 · ERC-8183 job -->
 <section class="slide">
-  <div class="rail"><b>WARRANT</b><span>Live demo · 现场演示</span><span class="pg">06 / 07</span></div>
+  <div class="rail"><b>WARRANT</b><span>From reputation to payment · 从信誉到报酬</span><span class="pg">06 / 08</span></div>
+  <h1>Paid only if it delivered what it disclosed.</h1>
+  <div class="cn-title">ERC-8183 托管任务：交付量对得上自己的披露和 Chainlink 公允价，才拿得到报酬。</div>
+  <div class="live">
+    <div>
+      <div class="hero">PAID</div>
+      <div class="hero-cap">Job 1 on Arc mainnet: agent 1419 swapped 0.5 USDC → 448,903 EURC units (quote 448,903; Chainlink-fair 448,542). Warrant's first real trade.</div>
+      <div class="hero-cap-cn">结算全看链上数据：对 Chainlink 少 0 bps（上限 450），对披露报价滑点 0 bps（上限 100）。任何人都能触发结算。</div>
+    </div>
+    <table class="tx">
+      <tr><th>Rule in <span class="mono">WarrantSwapJob.settle</span></th><th>If broken</th></tr>
+      <tr><td>Submit must carry the agent's on-chain Warrant disclosure for this order<span class="sub">signed by the provider; principal = client; same tokens and amount</span></td><td class="r"><span class="pill x">cannot submit</span></td></tr>
+      <tr><td>Delivered ≥ Chainlink-fair − (impact + fee budget + tolerance)</td><td class="r"><span class="pill x">rejected</span></td></tr>
+      <tr><td>Delivered ≥ disclosed quote − warrant slippage<span class="sub">ties the disclosure (quote) to the execution</span></td><td class="r"><span class="pill x">rejected</span></td></tr>
+      <tr><td>Disclosed FAIL, traded anyway · warrant revoked or changed</td><td class="r"><span class="pill x">rejected</span></td></tr>
+      <tr><td>All pass</td><td class="r"><span class="pill c">fee → agent</span></td></tr>
+    </table>
+  </div>
+  <div class="source">Either way the delivered tokens go to the client. Settle <span class="mono">0xc512…43a3</span>; swap <span class="mono">0xeca1…95fa</span>; core = ERC-8183 reference implementation (MIT, unmodified). Also live: <span class="mono">WarrantValidator</span> answers ERC-8004 validation requests (agent 1419: 100). <span class="cn">本页数据均为 Arc 主网链上读数，2026-10-14。</span></div>
+</section>
+
+<!-- 7 · Honest vs liar -->
+<section class="slide">
+  <div class="rail"><b>WARRANT</b><span>Live demo · 现场演示</span><span class="pg">07 / 08</span></div>
   <h1>Same bad quote. One agent tells the truth.</h1>
   <div class="cn-title">同一笔坏报价，一个代理说真话，一个说谎。</div>
   <div class="duo">
@@ -284,9 +308,9 @@
   <div class="source">Output of <span class="mono">node scripts/demo-pricecheck.mjs</span>: an Arc mainnet fork with the deployed contracts and live feeds; both agents and the quote are staged. <span class="cn">本地分叉 Arc 主网运行，零成本，可现场复现。</span></div>
 </section>
 
-<!-- 7 · Close -->
+<!-- 8 · Close -->
 <section class="slide">
-  <div class="rail"><b>WARRANT</b><span>Limits and try it · 局限与试用</span><span class="pg">07 / 07</span></div>
+  <div class="rail"><b>WARRANT</b><span>Limits and try it · 局限与试用</span><span class="pg">08 / 08</span></div>
   <h1>Reveal, not enforce. Now with a second opinion.</h1>
   <div class="cn-title">只揭示，不拦截；现在多了一个独立的第二意见。</div>
   <div class="close">
@@ -295,7 +319,7 @@
       <div><div class="en">A 100 bps tolerance absorbs oracle lag; smaller lies pass.</div><div class="zh">100 bps 容差吸收价格源滞后，更小的偏差不会被标记。</div></div>
       <div><div class="en">The check runs when someone calls it; unchecked is visible, not penalised.</div><div class="zh">有人调用才复核；未复核可见，但不扣分。</div></div>
       <div><div class="en">Gas outside the quote is not in the output; the fee-load check covers it.</div><div class="zh">报价外的 gas 不计入，由费用占比一项覆盖。</div></div>
-      <div><div class="en">Mainnet, not audited; the contracts hold no funds.</div><div class="zh">已上主网，未审计；合约不托管资金。</div></div>
+      <div><div class="en">Mainnet, not audited; only the job contracts escrow funds, between submit and settle.</div><div class="zh">已上主网，未审计；只有托管任务在提交到结算之间托管资金。</div></div>
     </div>
     <div class="ask">
       <div class="h">Code · 代码</div>
@@ -303,7 +327,7 @@
       <div class="h">Run the demo · 复现演示</div>
       <div class="cmd">npm install &amp;&amp; npm run build<br>node scripts/demo-pricecheck.mjs</div>
       <div class="h">Built for this event · 本届新增</div>
-      <div class="p">WarrantPriceCheck, 23 contract tests, 6 plugin tests, <span class="mono">--price-check</span>, relayer step, Arc mainnet deployment.</div>
+      <div class="p">WarrantPriceCheck, WarrantValidator (ERC-8004), WarrantSwapJob (ERC-8183); 45 contract and 6 plugin tests; all live on Arc mainnet.</div>
       <div class="p-cn">独立开发，使用 AI 编程工具，已在 README 披露。</div>
     </div>
   </div>
