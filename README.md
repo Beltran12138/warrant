@@ -15,8 +15,12 @@ can check what the agent was allowed to do, and prove it was told the trade was 
 **New for ETH Shenzhen 2026: the agent no longer grades its own homework on price.** Every scorecard
 number used to come from the agent's own plugin. `WarrantPriceCheck` re-prices each signed disclosure
 on chain with **Chainlink Data Feeds**, and an agent that signs PASS on a quote the oracle puts out of
-bounds is recorded as **contradicted**, with an ERC-8004 reputation entry to match. Live on Arc mainnet;
-see [Chainlink price check](#chainlink-price-check-on-arc-mainnet-2026-10-14) and
+bounds is recorded as **contradicted**, with an ERC-8004 reputation entry to match. The same check
+settles **ERC-8183 jobs** (an agent hired to swap is paid only if what it delivered matches its own
+disclosure and the Chainlink-fair price; Warrant's first real swap was settled this way) and answers
+**ERC-8004 validation** requests, so an honest agent can carry a credential. All live on Arc mainnet;
+see [Chainlink price check](#chainlink-price-check-on-arc-mainnet-2026-10-14),
+[ERC-8183 swap job](#erc-8183-swap-job-and-erc-8004-validation-on-arc-mainnet-2026-10-14) and
 [what was built for this event](#pre-existing-work-and-build-window).
 
 > Renamed from "Mandate" on 2026-09-26 to avoid confusion with an unrelated project of the same
@@ -205,6 +209,75 @@ no real trading agent has been caught lying.
 | Same feeds, read through the contract | [`src/lib/onchain.ts`](src/lib/onchain.ts) (`readOracleCheck`), [`src/lib/score.ts`](src/lib/score.ts) (`oracleDimension`), [`src/commands/warrant/preflight.ts`](src/commands/warrant/preflight.ts) (`--price-check`) | The agent sees the oracle's verdict before it signs |
 | Feed addresses and parameters | [`contracts/script/DeployPriceCheckArc.s.sol`](contracts/script/DeployPriceCheckArc.s.sol) | Arc mainnet USDC/USD and EURC/USD |
 | Tests against the live feeds | [`contracts/test/ArcPriceCheck.fork.t.sol`](contracts/test/ArcPriceCheck.fork.t.sol), [`test/pricecheck.test.mjs`](test/pricecheck.test.mjs) | Fair output recomputed from raw feed answers |
+
+### ERC-8183 swap job and ERC-8004 validation on Arc mainnet (2026-10-14)
+
+Two more places the Chainlink check now reaches, both live on Arc mainnet.
+
+**1. A paid job, settled by chain data (ERC-8183).** [ERC-8183](https://eips.ethereum.org/EIPS/eip-8183)
+(Draft) is a job with an escrowed fee and an evaluator who alone decides complete or reject.
+[`WarrantSwapJob`](contracts/src/WarrantSwapJob.sol) is both the hook and the evaluator of "swap this for
+me" jobs, where the client is also the agent's Warrant principal:
+
+- **Funding** hands the agent the client's capital (the hook pulls it from the client).
+- **Submitting** requires the agent to deposit what it actually got and attach the Warrant disclosure it
+  signed for the quote: on chain, signed by the job's provider, principal = the job's client, terms = the
+  order. No disclosure, no delivery.
+- **Settling** is permissionless and decided from chain data only. The agent is paid if the delivered output
+  is within the warrant's price-impact + fee budget of the **Chainlink-fair** output (plus the oracle
+  tolerance), within the warrant's **slippage** limit of the output it **disclosed** (the disclosure is the
+  quote, the deposit is the execution: inside a job, the two are finally linked), it did not disclose FAIL
+  and trade anyway, and the warrant is still active at the disclosed version. Otherwise the job is rejected
+  and the fee goes back to the client. Either way the delivered tokens go to the client: the capital was
+  theirs.
+
+The core is the ERC-8183 reference implementation ([`erc-8183/base-contracts`](https://github.com/erc-8183/base-contracts)
+`142e669`, MIT), vendored unmodified in [`contracts/src/vendor/erc8183`](contracts/src/vendor/erc8183) and
+deployed behind a proxy with no fees. Its reference `FundTransferHook` returns the same token and amount, so
+it cannot express a swap; Arc's own ERC-8183 instance is testnet-only, has no Chainlink feeds there, and only
+Circle can whitelist hooks on it.
+
+**The live job.** Job 1: the deployer (principal) hired the `mm` wallet (ERC-8004 agent 1419) to turn 0.5
+USDC into EURC for a 0.01 USDC fee. The agent took a real `mm swap quote` (`0xe984b279…b2ea`), ran
+`mm warrant preflight --price-check` (PASS on all eight dimensions; Chainlink-fair 448,542 EURC units, quote
+448,903), signed the disclosure, **executed the swap** (Warrant's first real trade, via Uniswap on Arc:
+448,903 EURC units received, exactly the quote), deposited the output and submitted. `settle` read: shortfall
+0 of 450 bps, slippage vs quote 0 of 100 bps, warrant active, no FAIL → **paid**; the fee went to the agent
+and the EURC to the client.
+
+For a $0.50 trade, gas alone is 199 bps of the notional on Arc, over warrant v1's 50 bps fee limit, so the
+principal re-granted the `mm` wallet's warrant as **v2 with a 300 bps fee limit** before the job (otherwise
+preflight says FAIL, as on 2026-10-05, and an honest agent does not trade).
+
+**2. A credential an honest agent can ask for (ERC-8004 validation).** Arc mainnet also hosts ERC-8004's
+ValidationRegistry. [`WarrantValidator`](contracts/src/WarrantValidator.sol) answers validation requests for
+Warrant disclosures with the same rule as `WarrantPriceCheck`: 100 when the disclosure survives the oracle,
+0 for a PASS the oracle puts out of bounds, tag `warrant-oracle`. Requests can only come from the agent's
+side, so this is the opt-in, positive half; `checkAndRate` (no consent needed) stays the way to catch a
+liar. The registry does not tie a request to the agent whose disclosure it names, so `respond` requires the
+identity's `agentWallet` to be the disclosure's signer; without that, anyone could collect a credential for
+someone else's honest disclosure (`test_credentialCannotBeBorrowed`). The 2026-10-14 FAIL disclosure of
+agent 1419 was validated: response **100**, `getSummary(1419, [WarrantValidator], "warrant-oracle")` = count 1,
+average 100.
+
+| | Address / transaction (Arc mainnet) |
+|---|---|
+| `WarrantValidator` | [`0x38Bc8a02…ce65`](https://explorer.arc.io/address/0x38Bc8a022F41B97A1b7CC7B49EfbBFeFA52fce65), deployed in [`0x0d70f356…7965`](https://explorer.arc.io/tx/0x0d70f3563059e75865e82c67c840eb3a02c48ab50d723e00ca9b8fa5bbfa7965); ERC-8004 ValidationRegistry `0x8004Cc84…AB58` |
+| Validation of agent 1419's disclosure `0x0466ddf1…3517` | [request](https://explorer.arc.io/tx/0x539e35499a7c62413a34ea1b643cc53650d59cae3f05d906f6c39e2e0539c1c4), [response 100](https://explorer.arc.io/tx/0xf6efa2637ba37079697eb9151d44b8d8ef433d92a1af64dae0c1df6ecc725973) |
+| ERC-8183 core (proxy) | [`0x15faD1B6…efD1`](https://explorer.arc.io/address/0x15faD1B686B6223A0a633483De6572Ae96e3efD1), implementation `0x7F2e54d3…E62B` |
+| `WarrantSwapJob` | [`0x63a97f29…9e0f`](https://explorer.arc.io/address/0x63a97f29de3fCD840dDfAB80727d226446cB9e0f) (`contracts/script/DeploySwapJobArc.s.sol`; 6 txs incl. whitelisting, ~6.99M gas) |
+| Warrant v2 for the `mm` wallet | [`0xbcac0320…7547`](https://explorer.arc.io/tx/0xbcac03203e69f97026e4b96de8ae4743885655cc7fdc527b338448ac40275547) (fee limit 300 bps) |
+| Job 1 | [create](https://explorer.arc.io/tx/0xa5bde16979fa1aea3ce67ab9457ed6289c44308698b8d943ae1b8f970ac2dc85), [order](https://explorer.arc.io/tx/0x5660b75e534c1dd5694f56377cc37031c24e090c24f048a6eb5adacff1914f3c), fee set by the agent [`0xad7f609c…8352`](https://explorer.arc.io/tx/0xad7f609c15b593f36e1f042faad22b63f836c3815c2a1c8792f737e770308352), [fund](https://explorer.arc.io/tx/0xb973812befd6da9a9a4159478fbe14571f8619e620bc0058b13c680b742d8721) |
+| The swap | [`0xeca1755b…95fa`](https://explorer.arc.io/tx/0xeca1755bf656938933bd76c02ebc59d083e6ffe34e7c545b4b4e462ec1d995fa) (`mm swap execute`, 0.5 USDC → 448,903 EURC units) |
+| Disclosure relayed + Chainlink check | [`0x5cc325f0…d303`](https://explorer.arc.io/tx/0x5cc325f087459a2ba05a44e70d44683b0123484272e0a4b760c3b12ab3edd303), [`0xc26cbf4d…d059`](https://explorer.arc.io/tx/0xc26cbf4dbfbaf18ea73a8b6c8da59e4625008f830540045096d343abdd28d059) |
+| Delivery | [approve](https://explorer.arc.io/tx/0x4f9d9cd3144220c813f95cdc92ef3ec3bebfef5a055f488ecbcdbbf43177318e), [submit](https://explorer.arc.io/tx/0x24ef3edf7e5254ce1d10d7e9a83f39745b395a09e7f83dc71d38c7733d162959) (by the `mm` wallet; Guard Mode email approval each) |
+| **Settled: paid** | [`0xc5124ed1…43a3`](https://explorer.arc.io/tx/0xc5124ed1fc64e9efa4eaf8bceaf4821b1c1ebaf0c943e9ebea63c5f1f7b343a3) (job Completed; 0.01 USDC to the agent, 448,903 EURC units to the client) |
+
+Driven by `scripts/swap-job-arc.mjs` (the agent's steps are printed as `mm wallet send-transaction`
+commands) and `scripts/validate-arc.mjs`. The fork tests use a 6-decimal stand-in for USDC: Arc's ERC-20
+USDC moves native balances through Arc protocol precompiles (`0x1800…0000` transfer, `0x1800…0001`
+isBlocklisted) that stock Foundry does not implement, and Arc Foundry ships Linux/macOS binaries only. The
+real USDC path is what the mainnet job above exercised.
 
 ### Arc mainnet (2026-10-05)
 
@@ -489,7 +562,9 @@ a threshold.
 npm test                              # scoring (14) + attestation builders (11) + audit (18) + on-chain integration on a local anvil (8) + ERC-8226 on anvil (8) + Chainlink price check, incl. an Arc mainnet fork (6)
 git clone --depth 1 https://github.com/foundry-rs/forge-std contracts/lib/forge-std   # once
 (cd rams && git clone --depth 1 --branch v5.4.0 https://github.com/OpenZeppelin/openzeppelin-contracts lib/openzeppelin-contracts && git clone --depth 1 https://github.com/foundry-rs/forge-std lib/forge-std)   # once, for the ERC-8226 test
-cd contracts && forge test            # WarrantRegistry (13) + WarrantAttestor (14) + WarrantReputation on a Fuji fork of the live ERC-8004 registries (5) + the full stack on an Arc mainnet fork (1) + WarrantPriceCheck (20) + WarrantPriceCheck on an Arc fork against the live Chainlink feeds (3)
+git clone --depth 1 --branch v5.6.1 https://github.com/OpenZeppelin/openzeppelin-contracts contracts/lib/openzeppelin-contracts                          # once, for ERC-8183
+git clone --depth 1 --branch v5.6.1 https://github.com/OpenZeppelin/openzeppelin-contracts-upgradeable contracts/lib/openzeppelin-contracts-upgradeable  # once, for ERC-8183
+cd contracts && forge test            # 78: WarrantRegistry (13) + WarrantAttestor (14) + WarrantReputation on a Fuji fork (5) + the stack on an Arc fork (1) + WarrantPriceCheck (20) + it on an Arc fork with live Chainlink feeds (3) + WarrantValidator on an Arc fork with the live ValidationRegistry (9) + WarrantSwapJob with the ERC-8183 reference core on an Arc fork (13)
 cd ../rams && forge test               # the vendored ERC-8226 reference suite (105), unmodified
 ```
 
@@ -538,10 +613,13 @@ to the values written with `cast`, not to the plugin's own conversion code.
   one tx, [`0x397aee33…7295`](https://testnet.monadvision.com/tx/0x397aee33947059aa23a82088254ea58a789e82b3ccd53b87cffe81c98dd97295),
   whose `SignedPreflightAttested` carries the quote hash `0xaffb6c2f…d016` and scorecard hash
   `0x2020c94f…91e1` that preflight printed, plus ERC-8004 feedback #3 for agent 1937.
-  No real swap has been executed yet (on Arc the warrant and the quote are both on mainnet; the
-  agent disclosed FAIL and did not trade).
-- **Mainnet, but not audited.** The Arc deployment is mainnet; Monad and Fuji are testnets. The
-  contracts hold no funds (they record warrants and disclosures only) and have not been audited.
+  The first real swap was executed on 2026-10-14 inside an ERC-8183 job on Arc mainnet (see
+  "ERC-8183 swap job"); outside a job, Warrant still does not execute or match trades.
+- **Mainnet, but not audited.** The Arc deployment is mainnet; Monad and Fuji are testnets. None of the
+  contracts has been audited. All but one hold no funds (they record warrants and disclosures);
+  `WarrantSwapJob` escrows the delivered tokens of a job between submit and settle, and the ERC-8183 core
+  escrows the job fee. A job whose agent takes the capital and never submits loses the capital (the fee is
+  refunded on expiry), as in the reference design.
 
 ## Pre-existing work and build window
 
@@ -555,7 +633,7 @@ The hackathons Warrant was entered in allow a pre-existing foundation if it is d
 | 2026-09-26 | Renamed Mandate → Warrant; redeployed as `WarrantRegistry`. | This commit and later |
 | 2026-09-27 → 09-28 | Signed attestations (`WarrantAttestor`), ERC-8004 identity and reputation, audit, real `mm` quotes, ERC-8226 (RAMS) integration. | Commits and deployments listed above |
 | 2026-10-05 | Arc mainnet deployment; fee load counts the quote's network fee. | `9e87ccf`, `3ab44f8` |
-| 2026-10-14 → | **ETH Shenzhen 2026:** `WarrantPriceCheck` (Chainlink Data Feeds), its unit and Arc-fork tests, `--price-check` in the plugin, `checkAndRate` in the relayer, the Arc mainnet deployment and live run, `scripts/demo-pricecheck.mjs`, `scripts/stage-liar-arc.mjs`, the ETH Shenzhen deck (`docs/warrant-ethsz.pdf`). | Commits from `388053e` on |
+| 2026-10-14 → | **ETH Shenzhen 2026:** `WarrantPriceCheck` (Chainlink Data Feeds), its unit and Arc-fork tests, `--price-check` in the plugin, `checkAndRate` in the relayer, the Arc mainnet deployment and live run, `scripts/demo-pricecheck.mjs`, `scripts/stage-liar-arc.mjs`, the ETH Shenzhen deck (`docs/warrant-ethsz.pdf`); then `WarrantValidator` (ERC-8004 validation) and `WarrantSwapJob` (ERC-8183, with the reference core vendored), their Arc-fork tests and the live mainnet job with Warrant's first real swap. | Commits from `388053e` on |
 
 **Version control started late.** The repository was only put under git on 2026-09-25, so work from
 09-03 to 09-14 appears as one snapshot commit instead of its own history. No commit is backdated.
@@ -567,9 +645,10 @@ The hackathons Warrant was entered in allow a pre-existing foundation if it is d
   deployment and the live demo.
 - **ETH Shenzhen 2026** (2026-09-30 → 10-23): Warrant was submitted to earlier hackathons (Monad
   Metropolis, Avalanche Buildathon, Arc Microgrants, BLI Legal Tech Hackathon 2). The increment built
-  for this event is the Chainlink price check, listed in the row above: one new contract
-  (`WarrantPriceCheck.sol`), 23 new contract tests, 6 new plugin tests, the `--price-check` dimension,
-  the relayer step, a mainnet deployment with an honest live run and a staged dishonest agent, and a fork demo. Everything else is the earlier work it
+  for this event, listed in the row above: three new contracts (`WarrantPriceCheck`, `WarrantValidator`,
+  `WarrantSwapJob`; the ERC-8183 core is vendored, not ours), 45 new contract tests, 6 new plugin tests, the
+  `--price-check` dimension, the relayer step, mainnet deployments with an honest live run, a staged
+  dishonest agent, a validated disclosure and a settled ERC-8183 job, and a fork demo. Everything else is the earlier work it
   builds on.
 
 ## AI disclosure

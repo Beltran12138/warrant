@@ -43,7 +43,7 @@ const CORE_ABI = [
   { type: "function", name: "fund", stateMutability: "nonpayable", inputs: [{ name: "jobId", type: "uint256" }, { name: "expectedToken", type: "address" }, { name: "expectedBudget", type: "uint256" }, { name: "optParams", type: "bytes" }], outputs: [] },
   { type: "function", name: "submit", stateMutability: "nonpayable", inputs: [{ name: "jobId", type: "uint256" }, { name: "deliverable", type: "bytes32" }, { name: "optParams", type: "bytes" }], outputs: [] },
   { type: "function", name: "getJob", stateMutability: "view", inputs: [{ name: "jobId", type: "uint256" }], outputs: [JOB] },
-  { type: "event", name: "JobCreated", inputs: [{ name: "jobId", type: "uint256", indexed: true }, { name: "client", type: "address", indexed: true }, { name: "provider", type: "address", indexed: true }, { name: "evaluator", type: "address", indexed: false }, { name: "expiredAt", type: "uint256", indexed: false }, { name: "hook", type: "address", indexed: false }] },
+  { type: "event", name: "JobCreated", inputs: [{ name: "jobId", type: "uint256", indexed: true }, { name: "client", type: "address", indexed: true }, { name: "provider", type: "address", indexed: true }, { name: "evaluator", type: "address", indexed: false }, { name: "expiredAt", type: "uint48", indexed: false }, { name: "hook", type: "address", indexed: false }] },
 ];
 const HOOK_ABI = [
   { type: "function", name: "placeOrder", stateMutability: "nonpayable", inputs: [{ name: "jobId", type: "uint256" }, { name: "sellToken", type: "address" }, { name: "sellAmount", type: "uint256" }, { name: "buyToken", type: "address" }, { name: "buyer", type: "address" }], outputs: [] },
@@ -81,6 +81,14 @@ const mmCommand = (to, data, intent) =>
 
 const [cmd, a1, a2, a3] = process.argv.slice(2);
 
+async function placeOrder(jobId) {
+  await send(`placeOrder(job ${jobId}: 0.5 USDC → EURC, buyer = client)`, { address: HOOK, abi: HOOK_ABI, functionName: "placeOrder", args: [jobId, USDC, CAPITAL, EURC, me] });
+  console.log(`
+Job ${jobId}. The agent (mm wallet) now sets the 0.01 USDC fee:
+`);
+  console.log(mmCommand(CORE, encodeFunctionData({ abi: CORE_ABI, functionName: "setBudget", args: [jobId, USDC, FEE, "0x"] }), `Warrant: accept swap job ${jobId} for a 0.01 USDC fee`));
+}
+
 if (cmd === "warrant") {
   // Principal (= client) re-grants the agent's warrant with a fee limit that fits a $0.50 trade on Arc, where
   // gas alone is ~2% of the notional: $1,000/trade, 1% slippage, 1.5% impact, 3% fees, same-wallet return.
@@ -102,9 +110,9 @@ if (cmd === "warrant") {
     args: [AGENT, HOOK, Number(expiredAt), "Warrant swap job: 0.5 USDC to EURC within the agent's warrant", HOOK, AGENT_ID],
   });
   const jobId = parseEventLogs({ abi: CORE_ABI, logs: r.logs, eventName: "JobCreated" })[0].args.jobId;
-  await send(`placeOrder(job ${jobId}: 0.5 USDC → EURC, buyer = client)`, { address: HOOK, abi: HOOK_ABI, functionName: "placeOrder", args: [jobId, USDC, CAPITAL, EURC, me] });
-  console.log(`\nJob ${jobId}. The agent (mm wallet) now sets the 0.01 USDC fee:\n`);
-  console.log(mmCommand(CORE, encodeFunctionData({ abi: CORE_ABI, functionName: "setBudget", args: [jobId, USDC, FEE, "0x"] }), `Warrant: accept swap job ${jobId} for a 0.01 USDC fee`));
+  await placeOrder(jobId);
+} else if (cmd === "order") {
+  await placeOrder(BigInt(a1)); // resume a job whose order was not placed
 } else if (cmd === "fund") {
   const jobId = BigInt(a1);
   await send("approve core for the 0.01 USDC fee", { address: USDC, abi: ERC20, functionName: "approve", args: [CORE, FEE] });
