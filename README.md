@@ -620,6 +620,15 @@ to the values written with `cast`, not to the plugin's own conversion code.
   `WarrantSwapJob` escrows the delivered tokens of a job between submit and settle, and the ERC-8183 core
   escrows the job fee. A job whose agent takes the capital and never submits loses the capital (the fee is
   refunded on expiry), as in the reference design.
+- **Static analysis only.** Slither 0.11.6 over `contracts/src` (vendored ERC-8183 and OpenZeppelin
+  excluded): 14 results, none exploitable on review. Two `arbitrary-send-erc20` in `WarrantSwapJob`: the
+  `from` is the job's client in `afterAction(fund)` and the submitting provider in `_deliver`; the hook is
+  callable only by its own ERC-8183 core, which already requires `fund` to come from the client and
+  `submit` from the provider. One `reentrancy-no-eth` and three `reentrancy-events`: the external calls go
+  to Warrant's own attestor and to the ERC-8004 registries. Four `unused-return` (ignored tuple fields;
+  the Chainlink read checks `answer > 0` and staleness), three `timestamp` (expiry and feed age, by design),
+  one `missing-zero-check` on a constructor argument. This is not an audit. Reproduce:
+  `cd contracts && slither . --filter-paths "lib|vendor|test|script"`.
 
 ## Pre-existing work and build window
 
