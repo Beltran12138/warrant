@@ -18,6 +18,8 @@ import {
   oracleDimension,
   withDimension,
   networkFeeUsd,
+  trackRecordLine,
+  type TrackRecordReading,
 } from "../../lib/score.js";
 import { loadWarrant } from "../../lib/spec.js";
 import {
@@ -34,6 +36,7 @@ import {
   readOnchainWarrant,
   readOracleCheck,
   readRamsCheck,
+  readTrackRecord,
   scoreAgainstOnchain,
   scorecardHash,
   VERDICT_INDEX,
@@ -98,6 +101,27 @@ const inputs = {
     required: false,
     prompt: false,
   },
+  trackRecord: {
+    type: InputFieldType.Text,
+    flag: "track-record",
+    message: "ERC-8004 reputation registry — show the agent's track-record evidence (Evidence Deflator's deflatedT) next to the scorecard; needs --agent-id, --evidence-client and --rpc-url",
+    required: false,
+    prompt: false,
+  },
+  agentId: {
+    type: InputFieldType.Text,
+    flag: "agent-id",
+    message: "The agent's ERC-8004 agentId (with --track-record)",
+    required: false,
+    prompt: false,
+  },
+  evidenceClient: {
+    type: InputFieldType.Text,
+    flag: "evidence-client",
+    message: "Comma-separated addresses whose deflatedT feedback you trust (with --track-record); anyone can write feedback, so the reader chooses",
+    required: false,
+    prompt: false,
+  },
   rpcUrl: {
     type: InputFieldType.Text,
     flag: "rpc-url",
@@ -139,6 +163,8 @@ type PreflightResult = {
   attestation?: Attestation;
   /** Explanation for soft states such as "no pending quote". */
   message?: string;
+  /** With --track-record: the agent's record, read from ERC-8004. Shown, never folded into the verdict or the scorecard hash. */
+  trackRecord?: TrackRecordReading & { entries: number; reputation: string };
 };
 
 const toNum = (v: unknown): number | undefined => {
@@ -174,8 +200,9 @@ export default class WarrantPreflight extends PluginCommand<PreflightResult> {
   protected readonly pluginCommandId = "warrant:preflight";
 
   async execute(io: CommandIO): Promise<PreflightResult> {
-    const { quoteId, warrantFile, registry, principal, agent, attestor, rams, priceCheck, rpcUrl } =
+    const { quoteId, warrantFile, registry, principal, agent, attestor, rams, priceCheck, rpcUrl, trackRecord, agentId, evidenceClient } =
       await io.resolveInputs(inputs);
+    const track = trackRecord?.trim() ? await this.readTrack(trackRecord.trim(), agentId, evidenceClient, rpcUrl) : undefined;
     const { spec, source } = loadWarrant(process.cwd(), warrantFile || "warrant.json");
 
     const store = this.ctx.swapQuoteStore;
@@ -212,7 +239,7 @@ export default class WarrantPreflight extends PluginCommand<PreflightResult> {
 
     if (!registry?.trim()) {
       const scorecard = scoreSwap(swap, spec);
-      return { scorecard, warrant: spec, warrantSource: source };
+      return { scorecard, warrant: spec, warrantSource: source, trackRecord: track };
     }
 
     // On-chain warrant: the limits the principal granted this agent in WarrantRegistry.
@@ -296,7 +323,27 @@ export default class WarrantPreflight extends PluginCommand<PreflightResult> {
       warrant: onchain.spec,
       warrantSource: `${onchain.source} v${onchain.version}${onchain.active ? "" : " (inactive)"}`,
       attestation,
+      trackRecord: track,
     };
+  }
+
+  /** The agent's deflatedT entries from the chosen clients; a failed read is reported, never shown as "no record". */
+  private async readTrack(
+    reputation: string,
+    agentId: string | undefined,
+    clients: string | undefined,
+    rpcUrl: string | undefined,
+  ): Promise<PreflightResult["trackRecord"]> {
+    const list = (clients ?? "").split(",").map((c) => c.trim().toLowerCase()).filter(Boolean) as Address[]; // lowercase: viem rejects a mistyped checksum
+    if (!agentId?.trim() || !list.length || !rpcUrl?.trim()) {
+      return { status: "none", line: "Track record: --track-record needs --agent-id, --evidence-client and --rpc-url; not read.", entries: 0, reputation };
+    }
+    try {
+      const entries = await readTrackRecord({ rpcUrl: rpcUrl.trim(), reputation: reputation as Address, agentId: BigInt(agentId.trim()), clients: list });
+      return { ...trackRecordLine(entries, agentId.trim()), entries: entries.length, reputation };
+    } catch (e) {
+      return { status: "none", line: `Track record: could not read ${reputation}: ${(e as Error).message.split("\n")[0]}`, entries: 0, reputation };
+    }
   }
 
   /** Fold an ERC-8226 mandate check into the scorecard when the sold asset is gated by that registry. */
@@ -479,7 +526,7 @@ export default class WarrantPreflight extends PluginCommand<PreflightResult> {
 
   override successHint(data: PreflightResult): string {
     if (!data.scorecard) return data.message ?? "No result.";
-    const out = renderScorecard(data.scorecard, data.warrantSource);
+    const out = renderScorecard(data.scorecard, data.warrantSource) + (data.trackRecord ? `\n\n  ${data.trackRecord.line}` : "");
     const a = data.attestation;
     if (!a) return out;
     return [

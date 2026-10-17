@@ -479,6 +479,23 @@ Plus a worst-case realised loss (slippage to `minDestAmount`) and a note when th
 likely trip the wallet's native Guard Mode 2FA. If the on-chain warrant is missing, revoked or
 expired, the verdict is forced to `fail`: the agent is not authorised.
 
+### Track record, next to the scorecard (`--track-record`)
+
+The scorecard is about one trade. Whether the agent has shown any skill is a different question,
+and the answer goes next to the scorecard, never into the verdict or the scorecard hash:
+
+```bash
+mm warrant preflight --track-record 0x8004BAa17C55a88189AE136b182e5fdA19dE9b63 --agent-id 1419   --evidence-client <address you trust> --rpc-url https://rpc.mainnet.arc.io
+```
+
+It reads `deflatedT` feedback for the agent from the ERC-8004 reputation registry: a t-statistic
+on the agent's trading record, written by [Evidence Deflator](https://evidencedeflator.com)
+(`tools/erc8004_evidence.py` in its repository), with `tag2 = bestOf<N>` when the agent was picked
+from a field of N. The plugin puts it against the bar for that field (Bonferroni, the same formula
+as the website) and prints one line, for example: *t = 3.42 against a bar of 4.90 for the best of
+47,310: strong enough for a record picked blind, not for the best of 47,310*. Anyone can write
+feedback in ERC-8004, so the reader chooses whose entries count (`--evidence-client`).
+
 ## Quick start
 
 Requirements: Node 22.18+, `mm` (`npm i -g @metamask/agent-wallet`), [Foundry](https://getfoundry.sh).
@@ -559,7 +576,7 @@ a threshold.
 ## Tests
 
 ```bash
-npm test                              # scoring (14) + attestation builders (11) + audit (18) + on-chain integration on a local anvil (8) + ERC-8226 on anvil (8) + Chainlink price check, incl. an Arc mainnet fork (6)
+npm test                              # scoring (14) + attestation builders (11) + audit (18) + on-chain integration on a local anvil (8) + ERC-8226 on anvil (8) + Chainlink price check, incl. an Arc mainnet fork (6) + track record from the live ERC-8004 registry on an Arc fork (5)
 git clone --depth 1 https://github.com/foundry-rs/forge-std contracts/lib/forge-std   # once
 (cd rams && git clone --depth 1 --branch v5.4.0 https://github.com/OpenZeppelin/openzeppelin-contracts lib/openzeppelin-contracts && git clone --depth 1 https://github.com/foundry-rs/forge-std lib/forge-std)   # once, for the ERC-8226 test
 git clone --depth 1 --branch v5.6.1 https://github.com/OpenZeppelin/openzeppelin-contracts contracts/lib/openzeppelin-contracts                          # once, for ERC-8183

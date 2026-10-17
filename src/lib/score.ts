@@ -362,3 +362,55 @@ export function oracleDimension(c: OracleCheck): Dimension {
 export function withDimension(sc: Scorecard, d: Dimension): Scorecard {
   return { ...sc, verdict: worst([sc.verdict, d.severity]), dimensions: [...sc.dimensions, d] };
 }
+
+// ---------- track record (shown next to the scorecard, never folded into it) ----------
+
+/** Inverse standard normal CDF (Acklam), enough for bars to two decimals. Same as evidencedeflator.com's hl.js. */
+function invNorm(p: number): number {
+  const a = [-3.969683028665376e1, 2.209460984245205e2, -2.759285104469687e2, 1.38357751867269e2, -3.066479806614716e1, 2.506628277459239];
+  const b = [-5.447609879822406e1, 1.615858368580409e2, -1.556989798598866e2, 6.680131188771972e1, -1.328068155288572e1];
+  const c = [-7.784894002430293e-3, -3.223964580411365e-1, -2.400758277161838, -2.549732539343734, 4.374664141464968, 2.938163982698783];
+  const d = [7.784695709041462e-3, 3.224671290700398e-1, 2.445134137142996, 3.754408661907416];
+  const lo = 0.02425;
+  if (p < lo) {
+    const q = Math.sqrt(-2 * Math.log(p));
+    return (((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) / ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1);
+  }
+  if (p > 1 - lo) {
+    const q = Math.sqrt(-2 * Math.log(1 - p));
+    return -(((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) / ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1);
+  }
+  const q = p - 0.5;
+  const r = q * q;
+  return ((((((a[0] * r + a[1]) * r + a[2]) * r + a[3]) * r + a[4]) * r + a[5]) * q) / (((((b[0] * r + b[1]) * r + b[2]) * r + b[3]) * r + b[4]) * r + 1);
+}
+
+/** Bar for the best of n records: Bonferroni on alpha = 1 - Phi(2), one-sided. bar(1) = 2. */
+export const barBestOf = (n: number): number => (n <= 1 ? 2 : invNorm(1 - 0.022750131948179098 / n));
+
+export interface TrackRecordReading {
+  status: "none" | "clears_field" | "clears_single" | "luck" | "loses";
+  line: string;
+}
+
+/** One line on the agent's track record for the principal, from the newest deflatedT entry. */
+export function trackRecordLine(entries: { t: number; pickedFrom: number }[], agentId: string): TrackRecordReading {
+  if (!entries.length) {
+    return { status: "none", line: `Track record (ERC-8004 agent ${agentId}): no deflatedT entry from the chosen evidence client. Nothing says this agent's record is more than luck.` };
+  }
+  const e = entries[entries.length - 1];
+  const bar = barBestOf(e.pickedFrom);
+  const field = e.pickedFrom > 1 ? `the best of ${e.pickedFrom.toLocaleString("en")}` : "a record picked blind";
+  const status: TrackRecordReading["status"] = e.t >= bar ? (e.pickedFrom > 1 ? "clears_field" : "clears_single") : e.t >= 2 ? "clears_single" : e.t <= -2 ? "loses" : "luck";
+  const say = {
+    clears_field: "strong enough even for where it was picked from",
+    clears_single: e.pickedFrom > 1 ? `strong enough for a record picked blind, not for ${field}` : "strong enough for a record picked blind",
+    luck: "cannot be told apart from luck",
+    loses: "losing, and not by chance",
+    none: "",
+  }[status];
+  return {
+    status,
+    line: `Track record (ERC-8004 agent ${agentId}): t = ${e.t.toFixed(2)} against a bar of ${bar.toFixed(2)} for ${field}: ${say}. A reading of past record, not of this trade.`,
+  };
+}

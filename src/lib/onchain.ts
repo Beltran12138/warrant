@@ -443,3 +443,60 @@ export function mmSignTypedDataCommand(td: AttestationTypedData): string {
   const verdict = ["PASS", "WARN", "FAIL"][td.message.verdict] ?? String(td.message.verdict);
   return `mm wallet sign-typed-data --chain-id ${td.domain.chainId} --payload '${JSON.stringify(td)}' --intent "Warrant: sign ${verdict} preflight attestation v${td.message.warrantVersion}" --wait`;
 }
+
+// ---------- track record: Evidence Deflator's deflatedT feedback in the ERC-8004 reputation registry ----------
+
+export const REPUTATION_READ_ABI = [
+  {
+    type: "function",
+    name: "readAllFeedback",
+    stateMutability: "view",
+    inputs: [
+      { name: "agentId", type: "uint256" },
+      { name: "clientAddresses", type: "address[]" },
+      { name: "tag1", type: "string" },
+      { name: "tag2", type: "string" },
+      { name: "includeRevoked", type: "bool" },
+    ],
+    outputs: [
+      { name: "clients", type: "address[]" },
+      { name: "feedbackIndexes", type: "uint64[]" },
+      { name: "values", type: "int128[]" },
+      { name: "valueDecimals", type: "uint8[]" },
+      { name: "tag1s", type: "string[]" },
+      { name: "tag2s", type: "string[]" },
+      { name: "revokedStatuses", type: "bool[]" },
+    ],
+  },
+] as const;
+
+/** One deflatedT entry: t = value / 10^valueDecimals, picked from N = tag2 "bestOf<N>" ("single" = 1). */
+export interface TrackRecordEntry {
+  client: Address;
+  index: number;
+  t: number;
+  pickedFrom: number;
+}
+
+/**
+ * Evidence Deflator's deflatedT feedback for an agent, newest last. Only entries from the given clients
+ * count: ERC-8004 lets anyone write feedback, so whose number it is has to be chosen by the reader.
+ */
+export async function readTrackRecord(opts: {
+  rpcUrl: string;
+  reputation: Address;
+  agentId: bigint;
+  clients: Address[];
+}): Promise<TrackRecordEntry[]> {
+  const client = createPublicClient({ transport: http(opts.rpcUrl) });
+  const [clients, idx, values, decimals, , tag2s] = await client.readContract({
+    address: opts.reputation,
+    abi: REPUTATION_READ_ABI,
+    functionName: "readAllFeedback",
+    args: [opts.agentId, opts.clients, "deflatedT", "", false],
+  });
+  return clients.map((c, i) => {
+    const m = /^bestOf(\d+)$/.exec(tag2s[i]);
+    return { client: c, index: Number(idx[i]), t: Number(values[i]) / 10 ** decimals[i], pickedFrom: m ? Number(m[1]) : 1 };
+  });
+}
