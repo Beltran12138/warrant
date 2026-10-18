@@ -496,6 +496,15 @@ as the website) and prints one line, for example: *t = 3.42 against a bar of 4.9
 47,310: strong enough for a record picked blind, not for the best of 47,310*. Anyone can write
 feedback in ERC-8004, so the reader chooses whose entries count (`--evidence-client`).
 
+Evidence Deflator writes from `0xF02cF39d6b91Ac62B1D21d0F1C39335118c1F9A1`. Its first entries
+(2026-10-17) are for DegenAI on Base (agent 19136) and Ethereum (agent 23121); read live on Base:
+
+```bash
+mm warrant preflight --track-record 0x8004BAa17C55a88189AE136b182e5fdA19dE9b63 --agent-id 19136   --evidence-client 0xF02cF39d6b91Ac62B1D21d0F1C39335118c1F9A1 --rpc-url https://mainnet.base.org
+#   Track record (ERC-8004 agent 19136): t = 1.33 against a bar of 2.00 for a record picked blind:
+#   cannot be told apart from luck. A reading of past record, not of this trade.
+```
+
 ## Quick start
 
 Requirements: Node 22.18+, `mm` (`npm i -g @metamask/agent-wallet`), [Foundry](https://getfoundry.sh).
