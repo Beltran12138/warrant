@@ -5,3 +5,4 @@ broadcast/*/31337/
 .env.*
 !.env.example
 node_modules/
+__pycache__/
