@@ -1,0 +1,20 @@
+{
+  "lib\\forge-std": {
+    "tag": {
+      "name": "v1.17.0",
+      "rev": "f3dae6e6ee381f25eb6a246f7da9b85c91a68219"
+    }
+  },
+  "lib\\openzeppelin-contracts": {
+    "tag": {
+      "name": "v5.4.0",
+      "rev": "c64a1edb67b6e3f4a15cca8909c9482ad33a02b0"
+    }
+  },
+  "lib\\reactive-lib-omni": {
+    "tag": {
+      "name": "v0.1.0",
+      "rev": "3ade0dcf1d27e67e5783ef807e73a1b9e0c0cce8"
+    }
+  }
+}

@@ -1,0 +1,12 @@
+[submodule "lib/forge-std"]
+	path = lib/forge-std
+	url = https://github.com/foundry-rs/forge-std
+[submodule "lib/reactive-lib-omni"]
+	path = lib/reactive-lib-omni
+	url = https://github.com/Reactive-Network/reactive-lib-omni
+[submodule "lib/openzeppelin-contracts"]
+	path = lib/openzeppelin-contracts
+	url = https://github.com/OpenZeppelin/openzeppelin-contracts
+[submodule "lib/warrant"]
+	path = lib/warrant
+	url = https://github.com/Beltran12138/warrant
