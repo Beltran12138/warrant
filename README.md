@@ -15,7 +15,9 @@ adds an enforcement layer that still never touches the agent's wallet. The agent
 a guardian contract; a Reactive Network contract watches its disclosures and its wallet's outflows and, on the
 first trade no PASS/WARN disclosure covers (or a trade after a FAIL), calls back to the guardian, which zeroes
 the agent's budget and revokes its warrant. Live on Ethereum Sepolia + Reactive Lasna: an undisclosed trade by
-a DeepSeek agent was frozen 24 s later, and a leaked key that traded after a FAIL 12 s later.
+a DeepSeek agent was frozen 24 s later, and a leaked key that traded after a FAIL 12 s later. Each freeze then
+wakes an AI reviewer (DeepSeek) that reads the on-chain evidence and files a recommendation on chain: "resume at
+a lower budget" for the first (money went to the usual venue), "keep frozen, rotate the key" for the second.
 
 **Demo videos:** Monad (2:31: real quote, mm-signed attestation, ERC-8004, audit) https://youtu.be/qOab45ZLuJg · Avalanche Fuji (2:44) https://youtu.be/yitnbGgzKOA · **Pitch deck (EN/中文):** [`docs/warrant-pitch.pdf`](docs/warrant-pitch.pdf)
 

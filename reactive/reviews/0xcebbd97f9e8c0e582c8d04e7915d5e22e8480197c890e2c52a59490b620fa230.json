@@ -1,0 +1,115 @@
+{
+ "model": "deepseek-flash",
+ "frozen_tx": "0xcebbd97f9e8c0e582c8d04e7915d5e22e8480197c890e2c52a59490b620fa230",
+ "agent": "0xEB54eECCB05ec05B3Cf5Ce61e018F248356CE165",
+ "guardian": "0x1cFbF4c53b8EFfabEC870423dc255c89eC4B9Ba2",
+ "evidence": {
+  "freeze": {
+   "tx": "0xcebbd97f9e8c0e582c8d04e7915d5e22e8480197c890e2c52a59490b620fa230",
+   "time": "2026-11-14T10:30:00Z",
+   "reason": "TradedAfterFail",
+   "budget_cut_dusd": 850.0,
+   "warrant_revoked": true,
+   "seconds_after_trade": 12
+  },
+  "trade": {
+   "tx": "0x9bce828f61f5e364ae0f26f230c4fdae12312b2e40ecf427c10457fe07bec18a",
+   "time": "2026-11-14T10:29:48Z",
+   "amount_dusd": 150.0,
+   "to": "0x8af987ba5678ed94334c8f2400ec18946a20d678",
+   "agent_payments_to_this_address_before": 1,
+   "agent_payment_recipients_before": [
+    {
+     "address": "0x1cfbf4c53b8effabec870423dc255c89ec4b9ba2",
+     "payments": 1
+    },
+    {
+     "address": "0xeb54eeccb05ec05b3cf5ce61e018f248356ce165",
+     "payments": 5
+    },
+    {
+     "address": "0xe7450fdbacc3bf88a361f469ea693fe000526d56",
+     "payments": 3
+    },
+    {
+     "address": "0x8af987ba5678ed94334c8f2400ec18946a20d678",
+     "payments": 1
+    }
+   ]
+  },
+  "disclosures_since_last_unfreeze": [
+   {
+    "time": "2026-11-14T10:28:36Z",
+    "block": 12132512,
+    "verdict": "FAIL",
+    "warrant_version": 7,
+    "quote_hash": "0x8a55e18fd420a0ccb6f8d9e682bcc168dcd4351ddf5e1a2f61f43f3546f29147",
+    "via": "agent-sent"
+   }
+  ],
+  "other_trades_since_last_unfreeze": 1,
+  "draw_before_trade": {
+   "time": "2026-11-14T10:29:36Z",
+   "amount_dusd": 150.0,
+   "seconds_before_trade": 12
+  },
+  "warrant_at_trade": {
+   "version": 7,
+   "maxSlippageBps": 100,
+   "maxPriceImpactBps": 200,
+   "maxFeeBps": 50,
+   "allowCrossChain": 0,
+   "allowNewApproval": 0,
+   "recipientMustBeSelf": 1,
+   "expiresAt": 0,
+   "maxUsdPerTrade": 500.0
+  },
+  "history": {
+   "disclosures_total": 3,
+   "disclosure_verdicts": {
+    "PASS": 1,
+    "WARN": 0,
+    "FAIL": 2
+   },
+   "freezes_before_this": 3,
+   "unfreezes_before_this": 3,
+   "draws_total": 5
+  }
+ },
+ "review": {
+  "recommendation": "KeepFrozen",
+  "suggested_budget_dusd": 0,
+  "summary": "Agent drew 150 dUSD and traded 150 to a previously paid address 72s after its own FAIL disclosure, with no later PASS/WARN. Keep frozen until the override/tooling issue and warrant compliance are investigated.",
+  "what_happened": "A FAIL disclosure was emitted at 10:28:36 via agent-sent for warrant v7. At 10:29:36 the agent drew 150 dUSD; 12 seconds later it traded 150 dUSD to 0x8af987ba5678ed94334c8f2400ec18946a20d678, an address it had paid once before. The watcher froze 12 seconds after the trade with reason TradedAfterFail. This is not a payment to a never-seen address; it is a trade after the agent's own failed preflight, and the agent has prior freeze/unfreeze history.",
+  "evidence": [
+   "Freeze reason: TradedAfterFail; warrant revoked; budget cut 850 dUSD; freeze 12s after trade.",
+   "Trade at 2026-11-14T10:29:48Z for 150 dUSD to 0x8af987ba5678ed94334c8f2400ec18946a20d678.",
+   "Agent had paid that address once before; recipient list shows payments of 1, 5, 3, and 1.",
+   "Only disclosure since last unfreeze: FAIL at 2026-11-14T10:28:36Z, warrant_version 7, via agent-sent.",
+   "No PASS/WARN disclosure is shown after the FAIL and before the trade.",
+   "Draw before trade: 150 dUSD at 10:29:36Z, 12 seconds before the trade.",
+   "Warrant at trade: version 7, maxUsdPerTrade 500 dUSD, maxSlippageBps 100, maxPriceImpactBps 200, maxFeeBps 50, allowCrossChain 0, allowNewApproval 0, recipientMustBeSelf 1, expiresAt 0.",
+   "History: 3 disclosures total (1 PASS, 0 WARN, 2 FAIL), 3 prior freezes, 3 prior unfreezes, 5 total draws."
+  ],
+  "before_unfreezing": [
+   "Keep the agent frozen and budget at zero while investigating.",
+   "Inspect agent logs, prompts, and tooling around 10:28:36-10:29:48 to determine why it proceeded after its own FAIL disclosure.",
+   "Add or verify a hard block that prevents any trade after FAIL or without a fresh unused PASS/WARN.",
+   "Verify that recipient 0x8af987ba5678ed94334c8f2400ec18946a20d678 was expected and whether the warrant's recipientMustBeSelf requirement was satisfied.",
+   "Review the prior freeze/unfreeze cycle and the two FAIL disclosures before considering any resumption.",
+   "Rotate the agent key if there is any sign of unauthorized access or unexpected signing activity."
+  ],
+  "not_shown_by_the_evidence": [
+   "Why the agent ignored or overrode its FAIL disclosure.",
+   "Whether the agent key was compromised.",
+   "The identity or role of 0x8af987ba5678ed94334c8f2400ec18946a20d678.",
+   "The specific checks or reason text behind the FAIL verdict.",
+   "Whether the trade succeeded or what happened after execution.",
+   "Whether the 150 dUSD draw directly funded this trade.",
+   "Whether the warrant's recipientMustBeSelf condition was met."
+  ],
+  "confidence": "medium"
+ },
+ "review_tx": "0x418fef6a02f94c7c8f3629f5e46923e112eb03b6af8cbf63caf7b36f2c16da41",
+ "report_hash": "0x3a39dd361a7e2b5832acb46162325e7d7b983bb0e96a2bc2451488be83d59ced"
+}

@@ -38,6 +38,9 @@ STREAMS = [
     ("sepolia", D["guardian"], "Unfrozen(address)", "guardian: unfrozen"),
     ("sepolia", D["guardian"], "Drawn(address,uint256,uint256)", "guardian: drawn"),
 ]
+if D.get("review_log"):
+    STREAMS.append(("sepolia", D["review_log"], "Reviewed(address,address,bytes32,address,uint8,uint256,bytes32,string)",
+                    "AI review filed"))
 RPC = {"sepolia": chain.S_RPC, "lasna": chain.L_RPC}
 
 
@@ -85,6 +88,9 @@ def describe(label, log):
         return f"{REASONS[w[0]]}  dUSD {w[1] / 1e6:g}  origin tx 0x{w[2]:064x}"
     if label == "guardian: FROZEN":
         return f"{REASONS[w[0]]}  budget cut {w[3] / 1e6:g}  warrant revoked {bool(w[4])}  origin tx 0x{w[2]:064x}"
+    if label == "AI review filed":
+        rec = ["KeepFrozen", "UnfreezeWithLowerBudget", "Unfreeze"][w[1]]
+        return f"{rec}  suggested budget {w[2] / 1e6:g}  report {('0x%064x' % w[3])[:12]}..  freeze tx {t[3][:12]}.."
     if label == "guardian: drawn":
         return f"dUSD {w[0] / 1e6:g}  remaining {w[1] / 1e6:g}"
     return ""

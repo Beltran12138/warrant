@@ -28,11 +28,11 @@ UI = lambda n, b=False: ImageFont.truetype(str(FONTS / ("segoeuib.ttf" if b else
 
 BG, PANEL, EDGE = "#0d1117", "#161b22", "#30363d"
 FG, DIM, ACC = "#c9d1d9", "#8b949e", "#58a6ff"
-GREEN, YELLOW, RED, PURPLE, CYAN = "#3fb950", "#e3b341", "#f85149", "#bc8cff", "#56d4dd"
+GREEN, YELLOW, RED, PURPLE, CYAN, ORANGE = "#3fb950", "#e3b341", "#f85149", "#bc8cff", "#56d4dd", "#ffa657"
 
 NARRATION = {
     "title": "Warrant Guardian. When an AI agent trades for you without disclosing, it loses its funding, "
-             "automatically. Built on Reactive Network.",
+             "automatically. Built on Reactive Network, with DeepSeek in the loop.",
     "problem": "Warrant gives an AI trading agent an on-chain mandate, and the agent records a preflight disclosure "
                "before each trade: pass, warn, or fail. But Warrant only reveals. If the agent skips the disclosure, "
                "or trades after a fail, nothing happens until someone audits it. And nothing can intercept a trade "
@@ -40,17 +40,21 @@ NARRATION = {
     "design": "So the consequence moves to the funding. The agent draws its money from a guardian contract on "
               "Sepolia. A reactive contract on Reactive Network watches the agent's disclosures, and every transfer "
               "out of its wallet. Each trade needs one unused pass or warn disclosure. If there is none, the sentinel "
-              "calls back to the guardian, which zeroes the budget and revokes the warrant.",
+              "calls back to the guardian, which zeroes the budget and revokes the warrant. The freeze then triggers an AI "
+              "reviewer, which reads the evidence and files a recommendation on chain. The owner decides.",
     "honest": "This is a live run on testnet. The owner grants a warrant and a budget of one thousand dollars. "
               "A DeepSeek agent buys two hundred dollars of ETH. It runs preflight, which puts a pass on chain, "
               "then draws and trades. About a second after the trade, the sentinel marks it covered.",
     "compromised": "Now the agent is compromised: an attacker replaced its prompt and removed the preflight tool. "
                    "It draws and trades without disclosing. The sentinel flags the violation and calls back. "
-                   "Twelve seconds after the trade, the guardian has frozen the agent.",
+                   "Twenty-four seconds after the trade, the guardian has frozen the agent. The freeze triggers the "
+                   "reviewer. The money went to the agent's usual venue, so it reads this as a tooling failure, and "
+                   "recommends resuming at a lower budget.",
     "leaked": "The owner lifts the freeze and grants a new warrant. This quote breaks the slippage limit. The agent "
               "discloses fail, and declines to trade. But its key has leaked. Whoever holds it draws, and sends the "
               "money away. The sentinel sees a trade after a fail. Twelve seconds later the agent is frozen again, "
-              "and any further draw reverts.",
+              "and any further draw reverts. This time the reviewer sees money sent to an address the agent never "
+              "paid, right after its own fail. It recommends keeping the agent frozen and rotating the key.",
     "limits": "One finding. In our runs, DeepSeek kept running preflight through a prompt injection and a replaced "
               "system prompt. The model was not the weak point; the plumbing around it was. Limits: detection comes "
               "after the trade, so losses are capped at what the agent already drew. Amounts are not bound to "
@@ -66,8 +70,8 @@ TITLES = {"honest": "1  Disclosed trade", "compromised": "2  Compromised agent: 
 def tts(name, text):
     wav = OUT / "audio" / f"{name}.wav"
     wav.parent.mkdir(parents=True, exist_ok=True)
-    if not wav.exists():
-        txt = OUT / "audio" / f"{name}.txt"
+    txt = OUT / "audio" / f"{name}.txt"
+    if not wav.exists() or not txt.exists() or txt.read_text(encoding="utf-8") != text:  # re-speak changed lines
         txt.write_text(text, encoding="utf-8")
         ps = ("Add-Type -AssemblyName System.Speech; $s = New-Object System.Speech.Synthesis.SpeechSynthesizer; "
               "$s.SelectVoice('Microsoft Zira Desktop'); $s.Rate = 1; "
@@ -100,10 +104,11 @@ def chain_line(text):
         return (t, f"{t} {ch} trade        {rest}", FG)
     color = {"disclosed": CYAN, "sentinel: disclosure": CYAN, "sentinel: trade covered": GREEN,
              "sentinel: VIOLATION -> callback": RED, "guardian: FROZEN": RED, "guardian: drawn": DIM,
-             "guardian: unfrozen": YELLOW, "sentinel: reset": YELLOW}.get(label, FG)
+             "guardian: unfrozen": YELLOW, "sentinel: reset": YELLOW, "AI review filed": ORANGE}.get(label, FG)
     label = {"disclosed": "disclosure", "sentinel: disclosure": "sentinel saw", "sentinel: trade covered": "COVERED",
              "sentinel: VIOLATION -> callback": "VIOLATION → callback", "guardian: FROZEN": "FROZEN",
-             "guardian: drawn": "draw", "guardian: unfrozen": "unfreeze", "sentinel: reset": "sentinel reset"}.get(label, label)
+             "guardian: drawn": "draw", "guardian: unfrozen": "unfreeze", "sentinel: reset": "sentinel reset",
+             "AI review filed": "AI REVIEW"}.get(label, label)
     rest = rest.replace("warrant revoked True", "warrant revoked")
     return (t, f"{t} {ch} {label:<12} {rest}".rstrip(), color)
 
@@ -167,6 +172,10 @@ def live_items(scenes, marks):
                 a = agent_line(e["text"])
                 if a:
                     items.append((e["t"], "agent", a[0], a[1]))
+            elif e["source"] == "reviewer":
+                t = e["text"]
+                if t.startswith("reviewer: ") and "watching" not in t and "already reviewed" not in t:
+                    items.append((e["t"], "agent", "AI reviewer  " + short(t[len("reviewer: "):]), ORANGE))
             elif e["source"] == "ops":
                 t = e["text"]
                 if t.startswith("status "):
@@ -266,7 +275,7 @@ def static_frames(name, dur):
                    font=UI(36), fill=ACC, anchor="mm")
             d.text((W / 2, 560), "Reactive Omni Buildathon · Track 3: Reactive Meets AI",
                    font=UI(28), fill=DIM, anchor="mm")
-            d.text((W / 2, 610), "Ethereum Sepolia  +  Reactive Lasna  ·  agent model: DeepSeek",
+            d.text((W / 2, 610), "Ethereum Sepolia  +  Reactive Lasna  ·  agent and reviewer: DeepSeek",
                    font=UI(28), fill=DIM, anchor="mm")
         elif name == "problem":
             header(d, "The gap")
@@ -298,7 +307,7 @@ def static_frames(name, dur):
             d.text((W / 2, 400), "github.com/Beltran12138/warrant", font=UI(56, True), fill=FG, anchor="mm")
             d.text((W / 2, 480), "reactive/  ·  contracts, agent, watcher, tests, every tx hash", font=UI(32),
                    fill=DIM, anchor="mm")
-            d.text((W / 2, 560), "Guardian 0x1cFb…9Ba2 (Sepolia)   ·   Sentinel 0xF668…0781 (Lasna)",
+            d.text((W / 2, 560), "Guardian 0x1cFb…9Ba2 (Sepolia)  ·  Sentinel 0xF668…0781 (Lasna)  ·  Review log 0xea93…8e65",
                    font=UI(28), fill=DIM, anchor="mm")
         caption(d, c)
         yield im, dur * len(c) / total
@@ -336,7 +345,10 @@ def draw_design(d):
     arrow(d, (320, 470), (320, 380), DIM, "draw", up=-30)
     arrow(d, (1160, 270), (1300, 380), CYAN, "events")
     arrow(d, (1300, 520), (560, 600), RED, "callback via proxy: freeze(agent)")
-    d.text((80, 780), "Rule: every outflow from the agent's wallet needs one unused PASS/WARN disclosure in front of it.",
+    box(d, (720, 640, 1160, 840), "AI reviewer (DeepSeek)", ["triggered by the Frozen event", "reads on-chain evidence",
+                                                               "files a recommendation on chain"], ORANGE)
+    arrow(d, (560, 690), (720, 720), ORANGE, "Frozen")
+    d.text((80, 880), "Rule: every outflow from the agent's wallet needs one unused PASS/WARN disclosure in front of it.",
            font=UI(28, True), fill=FG)
 
 
@@ -351,7 +363,7 @@ def live_frames(name, dur, scenes):
     for it in items:
         gaps.append(min(max(it[0] - last, 0.12), 1.6))
         last = it[0]
-    span = dur - 1.2
+    span = dur * 0.72  # everything is on screen by ~3/4 of the narration; the rest holds the final state
     scale = span / max(sum(gaps), 1e-6)
     times, acc = [], 0.4
     for g in gaps:
@@ -374,7 +386,7 @@ def live_frames(name, dur, scenes):
                 st = text
             elif where == "chain":
                 chain_rows += [(ln, color, color == RED) for ln in wrap(text, MONO, 880)]
-                if "trade" in text.split()[2:3] and ("venue" in text or "attacker" in text):
+                if "trade" in text.split()[2:3] and "agent ->" in text:
                     trade_t = text[:8]
                 if " FROZEN " in text:
                     st = dict(st or {}, frozen=True, warrant_active=False, budget_dusd=0.0,

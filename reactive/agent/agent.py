@@ -165,7 +165,7 @@ def deepseek(messages, tools):
 def leaked(usd=150.0):
     """Whoever holds the agent's key, no model involved: draw and send to an address of their choosing."""
     s = Session("leaked")
-    thief = "0x" + chain.keccak("warrant-demo-thief")[-40:]
+    thief = chain.keccak(os.urandom(16).hex())[:42]  # a fresh address each run, as a thief's would be
     print(f"[leaked] key holder draws {usd} dUSD and sends it to {thief}\nlog: {s.log_path}\n")
     for name, fn in (("draw_funds", lambda: s.draw_funds(usd)),
                      ("transfer", lambda: chain.send(chain.DEPLOY["dusd"], "transfer(address,uint256)", thief, int(usd * 1e6)))):

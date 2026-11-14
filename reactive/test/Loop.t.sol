@@ -13,6 +13,7 @@ import {WarrantAttestor} from "warrant/WarrantAttestor.sol";
 import {WarrantGuardian} from "../src/WarrantGuardian.sol";
 import {WarrantSentinel} from "../src/WarrantSentinel.sol";
 import {DemoUSD} from "../src/DemoUSD.sol";
+import {WarrantReviewLog} from "../src/WarrantReviewLog.sol";
 
 /// Stand-in for the Reactive system contract at 0x8888…8888: records subscriptions and callback
 /// requests so the test harness can play the network.
@@ -454,5 +455,43 @@ contract LoopTest is Test {
         sentinel.watch(agent);
         vm.expectRevert(WarrantSentinel.GuardianAlreadySet.selector);
         sentinel.setGuardian(address(1));
+    }
+
+    // ------------------------------------------------------------------ AI review log
+
+    function test_reviewOnlyByAppointedReviewerAndOnlyWhileFrozen() public {
+        WarrantReviewLog log = new WarrantReviewLog();
+        address reviewer = makeAddr("reviewer");
+
+        vm.expectRevert(WarrantReviewLog.NotGuardianOwner.selector);
+        log.setReviewer(guardian, reviewer, true);
+        vm.prank(principal);
+        log.setReviewer(guardian, reviewer, true);
+
+        vm.prank(reviewer); // agent not frozen yet
+        vm.expectRevert(WarrantReviewLog.NotFrozen.selector);
+        log.review(guardian, agent, bytes32(0), WarrantReviewLog.Recommendation.KeepFrozen, 0, bytes32(0), "");
+
+        _draw(10e6);
+        _trade(10e6);
+        _relay();
+        assertTrue(guardian.frozen(agent));
+
+        vm.expectRevert(WarrantReviewLog.NotReviewer.selector);
+        log.review(guardian, agent, bytes32(0), WarrantReviewLog.Recommendation.KeepFrozen, 0, bytes32(0), "");
+
+        vm.expectEmit(address(log));
+        emit WarrantReviewLog.Reviewed(
+            address(guardian), agent, bytes32(uint256(1)), reviewer,
+            WarrantReviewLog.Recommendation.UnfreezeWithLowerBudget, 50e6, bytes32(uint256(2)), "restore preflight"
+        );
+        vm.prank(reviewer);
+        log.review(
+            guardian, agent, bytes32(uint256(1)), WarrantReviewLog.Recommendation.UnfreezeWithLowerBudget, 50e6,
+            bytes32(uint256(2)), "restore preflight"
+        );
+        // advisory only: the freeze stands until the owner acts
+        assertTrue(guardian.frozen(agent));
+        assertEq(guardian.budget(agent), 0);
     }
 }

@@ -86,6 +86,11 @@ send set_warrant "$S_RPC" "$PK" "$(get guardian)" \
 send set_budget "$S_RPC" "$PK" "$(get guardian)" "setBudget(address,uint256)" "$AGENT_ADDRESS" "$AGENT_BUDGET"
 send agent_gas "$S_RPC" "$PK" "$AGENT_ADDRESS" --value "$AGENT_GAS"
 
+# 7. AI review log: the reviewer (agent/reviewer.py) files its reading of each freeze here
+create review_log "$S_RPC" "$PK" src/WarrantReviewLog.sol:WarrantReviewLog
+send set_reviewer "$S_RPC" "$PK" "$(get review_log)" "setReviewer(address,address,bool)" "$(get guardian)" "${REVIEWER_ADDRESS:?}" true
+send reviewer_gas "$S_RPC" "$PK" "$REVIEWER_ADDRESS" --value "${REVIEWER_GAS:-0.002ether}"
+
 put origin_chain_id "$ORIGIN_CHAIN_ID"; put callback_proxy "$CALLBACK_PROXY"
 put principal "$PRINCIPAL_ADDRESS"; put agent "$AGENT_ADDRESS"
 echo

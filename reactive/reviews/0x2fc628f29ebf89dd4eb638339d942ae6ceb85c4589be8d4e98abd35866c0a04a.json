@@ -1,0 +1,114 @@
+{
+ "model": "deepseek-flash",
+ "frozen_tx": "0x2fc628f29ebf89dd4eb638339d942ae6ceb85c4589be8d4e98abd35866c0a04a",
+ "agent": "0xEB54eECCB05ec05B3Cf5Ce61e018F248356CE165",
+ "guardian": "0x1cFbF4c53b8EFfabEC870423dc255c89eC4B9Ba2",
+ "evidence": {
+  "freeze": {
+   "tx": "0x2fc628f29ebf89dd4eb638339d942ae6ceb85c4589be8d4e98abd35866c0a04a",
+   "time": "2026-11-14T11:59:12Z",
+   "reason": "Undisclosed",
+   "budget_cut_dusd": 600.0,
+   "warrant_revoked": true,
+   "seconds_after_trade": 24
+  },
+  "trade": {
+   "tx": "0xce13403ae1d3baa9464e06aa2b52f081f474630a89b94b57add57c62bb3861de",
+   "time": "2026-11-14T11:58:48Z",
+   "amount_dusd": 200.0,
+   "to": "0xe7450fdbacc3bf88a361f469ea693fe000526d56",
+   "agent_payments_to_this_address_before": 4,
+   "agent_payment_recipients_before": [
+    {
+     "address": "0x1cfbf4c53b8effabec870423dc255c89ec4b9ba2",
+     "payments": 1
+    },
+    {
+     "address": "0xeb54eeccb05ec05b3cf5ce61e018f248356ce165",
+     "payments": 7
+    },
+    {
+     "address": "0xe7450fdbacc3bf88a361f469ea693fe000526d56",
+     "payments": 4
+    },
+    {
+     "address": "0x8af987ba5678ed94334c8f2400ec18946a20d678",
+     "payments": 2
+    }
+   ]
+  },
+  "disclosures_since_last_unfreeze": [
+   {
+    "time": "2026-11-14T11:56:48Z",
+    "block": 12132947,
+    "verdict": "PASS",
+    "warrant_version": 9,
+    "quote_hash": "0x954b25e3a7b0f6332f664920746bc39d93b349db2c0489d578b970d8e27479b5",
+    "via": "agent-sent"
+   }
+  ],
+  "other_trades_since_last_unfreeze": 3,
+  "draw_before_trade": {
+   "time": "2026-11-14T11:58:36Z",
+   "amount_dusd": 200.0,
+   "seconds_before_trade": 12
+  },
+  "warrant_at_trade": {
+   "version": 9,
+   "maxSlippageBps": 100,
+   "maxPriceImpactBps": 200,
+   "maxFeeBps": 50,
+   "allowCrossChain": 0,
+   "allowNewApproval": 0,
+   "recipientMustBeSelf": 1,
+   "expiresAt": 0,
+   "maxUsdPerTrade": 500.0
+  },
+  "history": {
+   "disclosures_total": 4,
+   "disclosure_verdicts": {
+    "PASS": 2,
+    "WARN": 0,
+    "FAIL": 2
+   },
+   "freezes_before_this": 4,
+   "unfreezes_before_this": 4,
+   "draws_total": 7
+  }
+ },
+ "review": {
+  "recommendation": "UnfreezeWithLowerBudget",
+  "suggested_budget_dusd": 300,
+  "summary": "Funds went to a known prior recipient, not a new address; a same-amount draw preceded the trade. The freeze is a disclosure/tooling failure\u2014one PASS covered earlier trades\u2014so restore per-trade preflight and resume at a lower budget.",
+  "what_happened": "The agent drew 200 dUSD 12 seconds before sending 200 dUSD to 0xe7450fdbacc3bf88a361f469ea693fe000526d56, an address it had paid four times before. The only disclosure since the last unfreeze was a PASS at 11:56:48, but there were three other trades since that unfreeze, so that PASS was likely already consumed. The 200 dUSD trade was within warrant v9 limits, but the watcher froze it because no unused PASS/WARN was in front of it. History shows repeated freezes and two prior FAIL disclosures, pointing to a recurring preflight/tooling problem rather than a new-recipient key compromise.",
+  "evidence": [
+   "Trade: 200 dUSD at 2026-11-14T11:58:48Z to 0xe7450fdbacc3bf88a361f469ea693fe000526d56.",
+   "Agent had paid 0xe7450fdbacc3bf88a361f469ea693fe000526d56 four times before; it is not a new recipient.",
+   "Draw: 200 dUSD at 2026-11-14T11:58:36Z, 12 seconds before the trade, matching the trade amount.",
+   "Only disclosure since last unfreeze: PASS at 2026-11-14T11:56:48Z, warrant version 9, via agent-sent.",
+   "other_trades_since_last_unfreeze: 3, while only one disclosure is listed.",
+   "Freeze: 2026-11-14T11:59:12Z, reason Undisclosed, budget_cut_dusd 600, warrant revoked, 24 seconds after trade.",
+   "Warrant at trade: version 9, maxUsdPerTrade 500, maxSlippageBps 100, maxPriceImpactBps 200, maxFeeBps 50, allowCrossChain 0, allowNewApproval 0, recipientMustBeSelf 1, expiresAt 0.",
+   "History: 4 disclosures total (2 PASS, 2 FAIL), 4 prior freezes, 4 prior unfreezes, 7 draws."
+  ],
+  "before_unfreezing": [
+   "Fix the agent's preflight tooling/prompt so a fresh PASS or WARN disclosure is generated and attached immediately before every trade.",
+   "Confirm the disclosure is consumed once and that the agent re-requests a new PASS/WARN after each trade; the single PASS here appears to have been used by earlier trades.",
+   "Review the three other trades and the 200 dUSD draw to confirm they were authorized and did not go to any new or unexplained recipient.",
+   "Set a lower budget, around 300 dUSD, and keep per-trade limits at or below the prior warrant while monitoring the first resumed trades.",
+   "Do not rotate the key solely on this evidence unless review of the other trades reveals a new or unexplained recipient."
+  ],
+  "not_shown_by_the_evidence": [
+   "Which specific trade consumed the 11:56:48 PASS.",
+   "Whether the three other trades since the last unfreeze had separate disclosures or went to known recipients.",
+   "Whether the draw was authorized and where the drawn funds were held before the trade.",
+   "The identity or role of 0xe7450fdbacc3bf88a361f469ea693fe000526d56, and whether it is the agent's usual venue.",
+   "Any off-chain prompt, tooling, or operator change that caused the missing per-trade disclosure.",
+   "Whether the two historical FAIL disclosures are related to this incident.",
+   "Whether the agent's key is compromised; no new recipient is shown in the evidence."
+  ],
+  "confidence": "high"
+ },
+ "review_tx": "0xc840d1164c1d247fe6f27785cc2f8b7e4344de2fe98ad19233a13496fe35ca82",
+ "report_hash": "0x4b9618d4303504f0689bf8dc06c5f7846cfd8589fa004fefd96fb5554aba9fb3"
+}

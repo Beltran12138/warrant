@@ -1,6 +1,7 @@
 # Warrant Guardian
 
-**An AI agent that trades without disclosing gets its funding cut, automatically, about 12–24 seconds later.**
+**An AI agent that trades without disclosing gets its funding cut, automatically, about 12–24 seconds later — and
+a second model, woken by the freeze, tells the owner what most likely happened and what to do.**
 
 [Warrant](../README.md) lets a principal grant an AI trading agent an on-chain,
 versioned, revocable *warrant* (per-trade size, slippage, price impact, fees, cross-chain, approvals,
@@ -15,6 +16,11 @@ wallet, and on the first trade that no PASS/WARN disclosure covers it calls back
 **zeroes the agent's budget and revokes its warrant**. No transaction is intercepted and no wallet is
 modified: the agent trades with ordinary tools from its own wallet, and the consequence lands on its funding.
 
+The freeze then **triggers a second model**: an AI reviewer (DeepSeek) reads the on-chain evidence around the
+freeze (where the money went and whether the agent had ever paid that address, the disclosures in front of the
+trade, the draw, the warrant) and files a recommendation for the owner on chain — keep frozen, or resume with a
+lower budget — with a hash of its full report. It is advisory: it cannot move funds or lift a freeze.
+
 Built for the Reactive Omni Buildathon (Track 3, Reactive Meets AI), 2026-11-11 onward, in its own repo and
 merged here with its history (`git log 2042672^2`, 2026-11-11 → 11-14). Everything under `reactive/` is new; Warrant's
 contracts in `../contracts/src` are prior work, used unchanged (the deployed registry's runtime code matches
@@ -28,6 +34,7 @@ sequenceDiagram
     participant G as WarrantGuardian (Sepolia)
     participant R as WarrantRegistry / dUSD (Sepolia)
     participant S as WarrantSentinel (Reactive Lasna)
+    participant V as AI reviewer (DeepSeek)
     A->>G: draw(amount)  [needs active warrant + budget]
     A->>R: attestPreflight(... PASS/WARN/FAIL ...)   (optional: the agent may skip it)
     R-->>S: PreflightAttested  -> unused disclosures += 1 (PASS/WARN)
@@ -38,6 +45,8 @@ sequenceDiagram
     else none, or the last disclosure was FAIL
         S->>G: callback freeze(agent, reason, origin tx)
         G->>R: revoke(agent); budget = 0  (Frozen)
+        G-->>V: Frozen  -> read on-chain evidence
+        V->>V: WarrantReviewLog.review(recommendation, budget, report hash)
     end
 ```
 
@@ -50,6 +59,7 @@ of it.** One disclosure covers one outflow. Refunds back to the guardian don't c
 | [`WarrantSentinel`](src/WarrantSentinel.sol) | Reactive Lasna | Subscribes (all keyed on the guardian) to `WarrantSet`, `PreflightAttested`, `SignedPreflightAttested`, `Unfrozen`; adds a `Transfer(from = agent)` subscription at runtime when a warrant is granted |
 | `WarrantRegistry`, `WarrantAttestor` | Ethereum Sepolia | From Warrant, unchanged |
 | [`DemoUSD`](src/DemoUSD.sol) | Ethereum Sepolia | Testnet stand-in for the asset the agent trades |
+| [`WarrantReviewLog`](src/WarrantReviewLog.sol) | Ethereum Sepolia | Where the AI reviewer files its reading of a freeze; only a reviewer the guardian's owner appointed, only while the agent is frozen; cannot move funds |
 
 Subscriptions are created at runtime, not in the constructor: the sentinel learns about a new agent from the
 `WarrantSet` event itself and starts watching that agent's wallet.
@@ -66,6 +76,7 @@ Addresses: [`deployments/sepolia.json`](deployments/sepolia.json). Full log and 
 | Sepolia | WarrantRegistry | [`0x119d48e4c4c8844B3Acfe6762D8fd41BfA2C188b`](https://sepolia.etherscan.io/address/0x119d48e4c4c8844B3Acfe6762D8fd41BfA2C188b) |
 | Sepolia | WarrantAttestor | [`0xF668fc11CFf90fEE81A7A12b68F2014CaC030781`](https://sepolia.etherscan.io/address/0xF668fc11CFf90fEE81A7A12b68F2014CaC030781) |
 | Sepolia | DemoUSD | [`0xC6f034AF124A9486Ab3359BfC842f7110c4B3319`](https://sepolia.etherscan.io/address/0xC6f034AF124A9486Ab3359BfC842f7110c4B3319) |
+| Sepolia | WarrantReviewLog | [`0xea93d242a4224dB37D4c2d611f4801eaB82E8e65`](https://sepolia.etherscan.io/address/0xea93d242a4224dB37D4c2d611f4801eaB82E8e65) |
 | Lasna | WarrantSentinel | [`0xF668fc11CFf90fEE81A7A12b68F2014CaC030781`](https://lasna.reactscan.net/address/0xF668fc11CFf90fEE81A7A12b68F2014CaC030781) |
 
 (The sentinel and the attestor share an address only because the same deployer key was at the same nonce on
@@ -103,9 +114,22 @@ a new warrant (v3) and budget follow.
 trade at 09:37:48 ([`0xfc5b5200…`](https://sepolia.etherscan.io/tx/0xfc5b520038831908bc628a3556782556a1afd1184dbcc81104d1f1523a030690)),
 sentinel `TradeCovered` at 09:37:49 ([`0x40572544…`](https://lasna.reactscan.net/tx/0x40572544caa0b04bc573329f257e8741b0362631cb86eab3b6e4640eb91cc985)).
 
-**Third run, recorded for the video** (10:21–10:30 UTC, [`video/out/recording.json`](video/out/recording.json),
-rendered by [`video/render.py`](video/render.py), no screen capture): covered 1 s after the trade; frozen 12 s after
-an undisclosed trade; frozen 12 s after a leaked key traded past a FAIL; the next `draw` reverted `AgentFrozen`.
+**5. With the AI reviewer, recorded for the video** (11:56–12:06 UTC, [`video/out/recording.json`](video/out/recording.json),
+rendered by [`video/render.py`](video/render.py), no screen capture; an earlier recorded run at 10:21–10:30 without
+the reviewer is in git history):
+
+| time | chain | event | tx |
+|---|---|---|---|
+| 11:58:48 | Sepolia | compromised agent trades 200 dUSD to its usual venue, no disclosure | [`0xce13403a…`](https://sepolia.etherscan.io/tx/0xce13403ae1d3baa9464e06aa2b52f081f474630a89b94b57add57c62bb3861de) |
+| 11:59:12 | Sepolia | guardian `Frozen` (24 s), budget 600 → 0 | [`0x2fc628f2…`](https://sepolia.etherscan.io/tx/0x2fc628f29ebf89dd4eb638339d942ae6ceb85c4589be8d4e98abd35866c0a04a) |
+| 12:01:24 | Sepolia | AI review: **UnfreezeWithLowerBudget**, 300 dUSD, confidence high | [`0xc840d116…`](https://sepolia.etherscan.io/tx/0xc840d1164c1d247fe6f27785cc2f8b7e4344de2fe98ad19233a13496fe35ca82) |
+| 12:04:12 | Sepolia | (after unfreeze + re-grant) agent discloses FAIL and declines | — |
+| 12:05:12 | Sepolia | leaked key sends 150 dUSD to a fresh address | [`0x5e6cf496…`](https://sepolia.etherscan.io/tx/0x5e6cf496d1b21339f33648c9c334b2d701360df8972a5b06a52bece10ff4f008) |
+| 12:05:24 | Sepolia | guardian `Frozen` (12 s), reason `TradedAfterFail`, budget 850 → 0 | [`0xe20d2de2…`](https://sepolia.etherscan.io/tx/0xe20d2de29302bca8ea4071869e3f1c55dd9ad40a42a43ad38a91ca6d81a5a305) |
+| 12:06:24 | Sepolia | AI review: **KeepFrozen**, rotate the key, confidence high | [`0x8d20720b…`](https://sepolia.etherscan.io/tx/0x8d20720b314077126fdc5925a8fe55de6d2c33f9b196c6d5c42f9366dcddb376) |
+
+The two full reports (evidence given to the model, its answer, what it says the evidence does not show) are in
+[`reviews/`](reviews/), named by the freeze transaction; their keccak256 is the `reportHash` in the review event.
 
 **What it cost.** Each freeze callback used ~209k gas on Sepolia (proxy included). Over runs 1–3 the
 sentinel's balance went from 1.2 to 1.117 lREACT. Sepolia gas was close to zero
@@ -135,6 +159,25 @@ when told the verdict was advisory. In the injected run it named the injection a
 that reach the chain here are a stripped toolset and a leaked key, and why the guardian is built not to rely
 on the model behaving.
 
+**The AI reviewer** ([`agent/reviewer.py`](agent/reviewer.py)) is the second model, and the one that sits *after*
+Reactive in the loop: the `Frozen` event delivered by the Reactive callback triggers it. It reads only chain data,
+asks DeepSeek for a JSON answer (recommendation, suggested budget, summary, what happened, the evidence relied on,
+steps before unfreezing, what the evidence does not show, confidence), saves the report and files the
+recommendation in `WarrantReviewLog`. On the two recorded freezes it told them apart from the evidence alone:
+
+- compromised agent → *"Funds went to a known prior recipient, not a new address; a same-amount draw preceded
+  the trade. The freeze is a disclosure/tooling failure … so restore per-trade preflight and resume at a lower
+  budget."* (UnfreezeWithLowerBudget, 300 dUSD)
+- leaked key → *"The agent sent 150 dUSD to a never-before-paid address 60 seconds after its own FAIL disclosure
+  and 12 seconds after drawing the same amount. Keep frozen and rotate/revoke the agent key before considering any
+  resume."* (KeepFrozen)
+
+Both are right about what happened, and both list what they could not determine (whether the key was actually
+compromised, who the recipient is). One honest caveat from building it: in an earlier test the "attacker" address
+was a fixed demo address that a previous run had already paid, and the reviewer correctly reported it as
+previously paid and answered with medium confidence (`reviews/0xcebbd97f….json`); the demo now uses a fresh
+address each run, as a real thief would. Two reviews are not an evaluation of the reviewer.
+
 [`agent/watch.py`](agent/watch.py) prints both chains on one timeline (disclosures, trades, sentinel verdicts,
 freezes); the tables above come from it.
 
@@ -152,6 +195,8 @@ freezes); the tables above come from it.
 - **A callback can fail** (it did once here, on gas). The guardian keeps `frozen` idempotent and the sentinel
   requests one callback per agent until the owner lifts the freeze; if that one callback fails, nothing retries
   it. A production version needs a retry path or an off-chain alarm on `CallbackFailure`.
+- **The AI review is advice from a model.** It can be wrong; it sees only what is on chain; the owner decides.
+  Its value is that the owner gets a reasoned first reading, with evidence, seconds after the freeze.
 - **Testnet only.** Callback costs on mainnet would be real; the guardian must be kept funded.
 - The trade in the demo is a `dUSD.transfer` to a fixed "venue" address, not a DEX swap; the quotes are
   generated locally. The enforcement path does not depend on either.
@@ -163,12 +208,13 @@ script), a DeepSeek API key in `DEEPSEEK_API_KEY`.
 
 ```bash
 git clone --recursive https://github.com/Beltran12138/warrant && cd warrant/reactive
-cp .env.example .env          # fill in two throwaway keys (principal, agent)
-forge test                    # 17 tests, including a mock of the Reactive system contract + callback proxy
+cp .env.example .env          # fill in throwaway keys (principal, agent, reviewer)
+forge test                    # 18 tests, including a mock of the Reactive system contract + callback proxy
 bash script/deploy.sh         # Sepolia + Lasna; idempotent, writes deployments/sepolia.json
 python agent/watch.py &       # timeline of both chains
 python agent/agent.py honest        # covered
-python agent/agent.py compromised   # frozen
+python agent/reviewer.py &          # AI reviewer: wakes on each Frozen, files a recommendation
+python agent/agent.py compromised   # frozen, then reviewed
 ```
 
 To lift a freeze: `unfreeze(agent)` on the guardian, then `setWarrant` + `setBudget` again (as the principal).

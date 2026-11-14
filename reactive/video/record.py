@@ -2,8 +2,9 @@
 
     python video/record.py            -> video/out/recording.json
 
-Sequence: re-grant (owner) -> honest agent (covered) -> compromised agent (frozen) -> draw after the freeze
-(reverts) -> lift + re-grant -> agent discloses FAIL and declines -> leaked key trades anyway (frozen).
+Sequence: re-grant (owner) -> honest agent (covered) -> compromised agent (frozen; the AI reviewer, triggered by
+the freeze, files its recommendation) -> lift + re-grant -> agent discloses FAIL and declines -> leaked key trades
+anyway (frozen; draw after the freeze reverts; AI review filed).
 Nothing here is staged: every line in the video comes from this recording.
 """
 import json
@@ -103,6 +104,10 @@ def main():
                              stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8")
     q = queue.Queue()
     threading.Thread(target=pump, args=(watch, "watch", q), daemon=True).start()
+    rq = queue.Queue()
+    reviewer = subprocess.Popen([sys.executable, "-u", str(ROOT / "agent" / "reviewer.py")], cwd=ROOT, env=ENV,
+                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, encoding="utf-8")
+    threading.Thread(target=pump, args=(reviewer, "reviewer", rq), daemon=True).start()
     try:
         mark("setup")
         regrant()
@@ -114,8 +119,8 @@ def main():
         mark("compromised")
         agent("compromised")
         wait_for(q, "guardian: FROZEN")
-        time.sleep(3)
-        draw_after_freeze()
+        wait_for(rq, "filed on chain", timeout=300)
+        wait_for(q, "AI review filed")
 
         mark("regrant")
         regrant()
@@ -127,11 +132,14 @@ def main():
         mark("leaked")
         agent("leaked")
         wait_for(q, "guardian: FROZEN")
-        time.sleep(3)
+        draw_after_freeze()
+        wait_for(rq, "filed on chain", timeout=300)
+        wait_for(q, "AI review filed")
         emit("ops", "status " + json.dumps(chain.status()))
         mark("end")
     finally:
         watch.terminate()
+        reviewer.terminate()
         (OUT / "recording.json").write_text(json.dumps(EVENTS, indent=1), encoding="utf-8")
         print(f"-> {OUT / 'recording.json'}  ({len(EVENTS)} events)")
 
