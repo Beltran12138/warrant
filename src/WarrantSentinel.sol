@@ -38,7 +38,7 @@ contract WarrantSentinel is AbstractReactive {
     uint8 internal constant VERDICT_FAIL = 2;
     uint8 internal constant REASON_UNDISCLOSED = 0;
     uint8 internal constant REASON_TRADED_AFTER_FAIL = 1;
-    uint64 internal constant CALLBACK_GAS_LIMIT = 300_000;
+    uint64 internal constant CALLBACK_GAS_LIMIT = 1_000_000; // 300k ended in CallbackFailure on Sepolia; eth_estimateGas puts freeze at ~168k
 
     address public immutable owner;
     uint256 public immutable originChainId;

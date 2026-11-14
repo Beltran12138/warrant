@@ -18,10 +18,10 @@ LREACT_FAUCET=0x9b9BB25f1A81078C544C829c5EB7822d747Cf434  # dev.reactive.network
 S_RPC=${_S:-${SEPOLIA_RPC:?}}
 L_RPC=${_L:-${LASNA_RPC:-https://lasna-rpc.rnk.dev/}}
 
-LREACT_BUY=${LREACT_BUY:-0.05ether}          # 0.05 SepETH -> 5 lREACT
-SENTINEL_FUND=${SENTINEL_FUND:-2ether}       # lREACT kept on the sentinel for reactive txs
-GUARDIAN_FUND=${GUARDIAN_FUND:-0.01ether}    # SepETH kept on the guardian for callbacks
-AGENT_GAS=${AGENT_GAS:-0.01ether}            # SepETH for the agent's own txs
+LREACT_BUY=${LREACT_BUY:-0.03ether}          # 0.03 SepETH -> 3 lREACT (Lasna gas 100 gwei: sentinel deploy ~0.15)
+SENTINEL_FUND=${SENTINEL_FUND:-1.5ether}       # lREACT kept on the sentinel for reactive txs
+GUARDIAN_FUND=${GUARDIAN_FUND:-0.005ether}    # SepETH kept on the guardian for callbacks
+AGENT_GAS=${AGENT_GAS:-0.005ether}           # SepETH for the agent's own txs
 GUARDIAN_DUSD=${GUARDIAN_DUSD:-100000000000} # 100,000 dUSD (6 decimals) in the vault
 AGENT_BUDGET=${AGENT_BUDGET:-1000000000}     # 1,000 dUSD the agent may draw
 # maxUsdPerTradeCents, maxSlippageBps, maxPriceImpactBps, maxFeeBps, crossChain, newApproval, recipientSelf, expiresAt
