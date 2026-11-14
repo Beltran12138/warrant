@@ -2,7 +2,7 @@
 
 **An AI agent that trades without disclosing gets its funding cut, automatically, about 12–24 seconds later.**
 
-[Warrant](https://github.com/Beltran12138/warrant) lets a principal grant an AI trading agent an on-chain,
+[Warrant](../README.md) lets a principal grant an AI trading agent an on-chain,
 versioned, revocable *warrant* (per-trade size, slippage, price impact, fees, cross-chain, approvals,
 recipient) and has the agent put a *preflight disclosure* on chain before each trade: "I scored this quote
 against my warrant and it came out PASS / WARN / FAIL". Warrant says plainly that it **reveals and does not
@@ -15,8 +15,10 @@ wallet, and on the first trade that no PASS/WARN disclosure covers it calls back
 **zeroes the agent's budget and revokes its warrant**. No transaction is intercepted and no wallet is
 modified: the agent trades with ordinary tools from its own wallet, and the consequence lands on its funding.
 
-Built for the Reactive Omni Buildathon (Track 3, Reactive Meets AI), 2026-11-11 onward. Warrant itself
-(`lib/warrant`, unchanged) is prior work used as a dependency.
+Built for the Reactive Omni Buildathon (Track 3, Reactive Meets AI), 2026-11-11 onward, in its own repo and
+merged here with its history (`git log 2042672^2`, 2026-11-11 → 11-14). Everything under `reactive/` is new; Warrant's
+contracts in `../contracts/src` are prior work, used unchanged (the deployed registry's runtime code matches
+them byte for byte, metadata hash aside).
 
 ## How it works
 
@@ -156,7 +158,7 @@ Requirements: Foundry, Python 3.10+ (stdlib only), Sepolia ETH (~0.05; Lasna lRE
 script), a DeepSeek API key in `DEEPSEEK_API_KEY`.
 
 ```bash
-git clone --recursive <this repo> && cd warrant-reactive
+git clone --recursive https://github.com/Beltran12138/warrant && cd warrant/reactive
 cp .env.example .env          # fill in two throwaway keys (principal, agent)
 forge test                    # 17 tests, including a mock of the Reactive system contract + callback proxy
 bash script/deploy.sh         # Sepolia + Lasna; idempotent, writes deployments/sepolia.json
@@ -168,4 +170,4 @@ python agent/agent.py compromised   # frozen
 To lift a freeze: `unfreeze(agent)` on the guardian, then `setWarrant` + `setBudget` again (as the principal).
 
 `lib/reactive-lib-omni` is referenced as a git submodule and is not redistributed here (it carries no
-open-source license). Everything else in `src/`, `test/`, `script/` and `agent/` is MIT.
+open-source license). Everything else is under the repository's MIT license.

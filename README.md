@@ -10,6 +10,13 @@ Warrant **reveals, it does not enforce.** It never custodies funds, never blocks
 tries to bypass a wallet's own guard rails. What it adds is *verifiability*: after the fact anyone
 can check what the agent was allowed to do, and prove it was told the trade was out of bounds.
 
+**New for the Reactive Omni Buildathon: consequences without interception.** [`reactive/`](reactive/README.md)
+adds an enforcement layer that still never touches the agent's wallet. The agent draws its trading funds from
+a guardian contract; a Reactive Network contract watches its disclosures and its wallet's outflows and, on the
+first trade no PASS/WARN disclosure covers (or a trade after a FAIL), calls back to the guardian, which zeroes
+the agent's budget and revokes its warrant. Live on Ethereum Sepolia + Reactive Lasna: an undisclosed trade by
+a DeepSeek agent was frozen 24 s later, and a leaked key that traded after a FAIL 12 s later.
+
 **Demo videos:** Monad (2:31: real quote, mm-signed attestation, ERC-8004, audit) https://youtu.be/qOab45ZLuJg · Avalanche Fuji (2:44) https://youtu.be/yitnbGgzKOA · **Pitch deck (EN/中文):** [`docs/warrant-pitch.pdf`](docs/warrant-pitch.pdf)
 
 **New for ETH Shenzhen 2026: the agent no longer grades its own homework on price.** Every scorecard
@@ -668,6 +675,7 @@ The hackathons Warrant was entered in allow a pre-existing foundation if it is d
 | 2026-09-26 | Renamed Mandate → Warrant; redeployed as `WarrantRegistry`. | This commit and later |
 | 2026-09-27 → 09-28 | Signed attestations (`WarrantAttestor`), ERC-8004 identity and reputation, audit, real `mm` quotes, ERC-8226 (RAMS) integration. | Commits and deployments listed above |
 | 2026-10-05 | Arc mainnet deployment; fee load counts the quote's network fee. | `9e87ccf`, `3ab44f8` |
+| 2026-11-11 → | **Reactive Omni Buildathon:** everything under `reactive/` (`WarrantGuardian`, `WarrantSentinel`, `DemoUSD`, their tests with a mock Reactive system contract and callback proxy, the deploy script, the DeepSeek agent and the two-chain watcher), the Sepolia + Lasna deployments and live runs. Built in its own repo, then merged here with its history. | `git log 2042672^2`: `c452280` (11-11) → `41d3610` (11-14) |
 | 2026-10-14 → | **ETH Shenzhen 2026:** `WarrantPriceCheck` (Chainlink Data Feeds), its unit and Arc-fork tests, `--price-check` in the plugin, `checkAndRate` in the relayer, the Arc mainnet deployment and live run, `scripts/demo-pricecheck.mjs`, `scripts/stage-liar-arc.mjs`, the ETH Shenzhen deck (`docs/warrant-ethsz.pdf`); then `WarrantValidator` (ERC-8004 validation) and `WarrantSwapJob` (ERC-8183, with the reference core vendored), their Arc-fork tests and the live mainnet job with Warrant's first real swap. | Commits from `388053e` on |
 
 **Version control started late.** The repository was only put under git on 2026-09-25, so work from
@@ -685,6 +693,8 @@ The hackathons Warrant was entered in allow a pre-existing foundation if it is d
   `--price-check` dimension, the relayer step, mainnet deployments with an honest live run, a staged
   dishonest agent, a validated disclosure and a settled ERC-8183 job, and a fork demo. Everything else is the earlier work it
   builds on.
+- **Reactive Omni Buildathon** (2026-11-05 → 12-05): the increment is `reactive/` only (row above). Warrant's
+  registry and attestor are used unchanged as dependencies.
 
 ## AI disclosure
 
@@ -697,6 +707,8 @@ This project was built with AI coding tools, as the hackathons require to be dis
   2026-09-26). The first is why Warrant reveals instead of enforcing: an `mm` plugin cannot
   intercept native commands, so an enforcement layer would be bypassable by construction. The
   second surfaced the naming collision and the Guard Mode positioning above.
+- The agent in `reactive/agent/` runs on DeepSeek (`deepseek-flash`) at runtime; that is the system under
+  test, not a coding tool.
 - Product thesis, scope, and every go/no-go decision are the author's. Each on-chain claim in this
   README was checked against transaction receipts.
 

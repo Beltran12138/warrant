@@ -56,9 +56,9 @@ echo "principal $PRINCIPAL_ADDRESS  sepolia $(cast balance "$PRINCIPAL_ADDRESS" 
 # 1. lREACT for the sentinel (arrives on Lasna a little later)
 send lreact_request "$S_RPC" "$PK" "$LREACT_FAUCET" "request(address)" "$PRINCIPAL_ADDRESS" --value "$LREACT_BUY"
 
-# 2. Origin side: the Warrant contracts (unchanged, from lib/warrant) and the demo asset
-create registry "$S_RPC" "$PK" lib/warrant/contracts/src/WarrantRegistry.sol:WarrantRegistry
-create attestor "$S_RPC" "$PK" lib/warrant/contracts/src/WarrantAttestor.sol:WarrantAttestor --constructor-args "$(get registry)"
+# 2. Origin side: the Warrant contracts (unchanged, from ../contracts/src) and the demo asset
+create registry "$S_RPC" "$PK" ../contracts/src/WarrantRegistry.sol:WarrantRegistry
+create attestor "$S_RPC" "$PK" ../contracts/src/WarrantAttestor.sol:WarrantAttestor --constructor-args "$(get registry)"
 create dusd "$S_RPC" "$PK" src/DemoUSD.sol:DemoUSD
 
 # 3. Reactive side: wait for lREACT, then the sentinel
