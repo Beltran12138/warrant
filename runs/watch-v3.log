@@ -1,0 +1,20 @@
+watching agent 0xEB54eECCB05ec05B3Cf5Ce61e018F248356CE165  guardian 0x1cFbF4c53b8EFfabEC870423dc255c89eC4B9Ba2  sentinel 0xF668fc11CFf90fEE81A7A12b68F2014CaC030781
+09:58:11Z  lasna    sentinel: reset                    
+                   tx 0xa464a6687be47480ad4030eaec9c4ba0c322bf837c5a1f59081031db87b2c1fc
+09:58:12Z  sepolia  guardian: unfrozen                 
+                   tx 0x707c6fbf02374e7ca3f4ac5515521c84b7220a8076df4539da030153a65d806e
+09:59:48Z  sepolia  disclosed                          FAIL  quote 0xafd7c0f705..  v3
+                   tx 0x929f53de95856d569894db7919d30a2cd1a965929477085be6b81ca95d38f805
+09:59:50Z  lasna    sentinel: disclosure               FAIL  unused disclosures now 0
+                   tx 0x4ba408144f8e28f10a266b2b1604935e4e05aed2c23d2e37e11dbd73a5062bea
+  (sepolia: Error: MPP HTTP request to https://ethereum-sepolia-rpc.publicnode.com/ failed: HTTP request failed: error sending request: error sending request: client error (Connect): tls handshake eof)
+10:01:12Z  lasna    sentinel: VIOLATION -> callback    TradedAfterFail  dUSD 150  origin tx 0x6017f0779a802a3018895e4fc0bb3b0757ed795634b7cd817664ba3dae6c1502
+                   tx 0x5bafd2758bc27cb3d1a266eea355e9ff584854c066c17a0878e65ed140ea87a4
+10:01:00Z  sepolia  guardian: drawn                    dUSD 150  remaining 850
+                   tx 0xb52a5ca5eea7e254fac8915c1591391d604b2629371bf1e84a0002b27ce253ec
+10:01:00Z  sepolia  transfer                           dUSD 150  0x1cfbf4c53b8effabec870423dc255c89ec4b9ba2 -> agent
+                   tx 0xb52a5ca5eea7e254fac8915c1591391d604b2629371bf1e84a0002b27ce253ec
+10:01:12Z  sepolia  transfer                           dUSD 150  agent -> 0x8af987ba5678ed94334c8f2400ec18946a20d678
+                   tx 0x6017f0779a802a3018895e4fc0bb3b0757ed795634b7cd817664ba3dae6c1502
+10:01:24Z  sepolia  guardian: FROZEN                   TradedAfterFail  budget cut 850  warrant revoked True  origin tx 0x6017f0779a802a3018895e4fc0bb3b0757ed795634b7cd817664ba3dae6c1502
+                   tx 0x6978841ea4d8a910e54d23b08dfe4b1e4590bbe6e03a4696ea37f5ebde430bbf

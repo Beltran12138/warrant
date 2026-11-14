@@ -4,6 +4,7 @@ import json
 import os
 import pathlib
 import subprocess
+import time
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 CAST = str(pathlib.Path.home() / ".foundry" / "bin" / ("cast.exe" if os.name == "nt" else "cast"))
@@ -50,7 +51,14 @@ def _run(args):
 
 
 def call(to, sig, *args, rpc=None):
-    return json.loads(_run(["call", "--json", "--rpc-url", rpc or S_RPC, to, sig, *map(str, args)]))
+    # reads only: public RPCs drop the odd TLS handshake, and a read is safe to repeat
+    for attempt in range(3):
+        try:
+            return json.loads(_run(["call", "--json", "--rpc-url", rpc or S_RPC, to, sig, *map(str, args)]))
+        except RuntimeError:
+            if attempt == 2:
+                raise
+            time.sleep(2)
 
 
 def send(to, sig, *args, rpc=None, key="AGENT_PRIVATE_KEY"):

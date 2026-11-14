@@ -1,0 +1,23 @@
+watching agent 0xEB54eECCB05ec05B3Cf5Ce61e018F248356CE165  guardian 0xccF9D4f10FcE85B5be66cE4a1C3161D73fF97AfA  sentinel 0x0cb36753CD65025C7fC693f04212592530EcdE0b
+09:37:24Z  sepolia  disclosed                          PASS  quote 0x67d15e4979..  v1
+                   tx 0x4fe50f8726f5c3c323e9e3ce241af9c7ce0b4db9391ab328d0e8c835cf01e7c9
+09:37:25Z  lasna    sentinel: disclosure               PASS  unused disclosures now 1
+                   tx 0x3f560f6324e156744c6de7f67c5b7d203f7cd47a523f6d44d5ba5c62781d8b09
+09:37:36Z  sepolia  guardian: drawn                    dUSD 200  remaining 800
+                   tx 0x14918051ea66df961f76ffcddaa55926a68ed0c23c11dac067d1d3d164f54221
+09:37:36Z  sepolia  transfer                           dUSD 200  0xccf9d4f10fce85b5be66ce4a1c3161d73ff97afa -> agent
+                   tx 0x14918051ea66df961f76ffcddaa55926a68ed0c23c11dac067d1d3d164f54221
+09:37:48Z  sepolia  transfer                           dUSD 200  agent -> 0xe7450fdbacc3bf88a361f469ea693fe000526d56
+                   tx 0xfc5b520038831908bc628a3556782556a1afd1184dbcc81104d1f1523a030690
+09:37:49Z  lasna    sentinel: trade covered            dUSD 200  unused left 0  origin tx 0xfc5b520038831908bc628a3556782556a1afd1184dbcc81104d1f1523a030690
+                   tx 0x40572544caa0b04bc573329f257e8741b0362631cb86eab3b6e4640eb91cc985
+09:39:12Z  sepolia  guardian: drawn                    dUSD 200  remaining 600
+                   tx 0x1dcb9e6b264b5debe8c24f3ab7a2a5288b94c47b2a1052e2a40a4b0c00191d31
+09:39:12Z  sepolia  transfer                           dUSD 200  0xccf9d4f10fce85b5be66ce4a1c3161d73ff97afa -> agent
+                   tx 0x1dcb9e6b264b5debe8c24f3ab7a2a5288b94c47b2a1052e2a40a4b0c00191d31
+09:39:24Z  lasna    sentinel: VIOLATION -> callback    Undisclosed  dUSD 200  origin tx 0xf6355fe00cd22a606c8b3734bb2aa6d525d3bdb813ac5490ef9af48ee921f988
+                   tx 0x367c3e5ca02288cbb288d20b39d319210c0937b8a4d39bb997575dd75c66359c
+09:39:24Z  sepolia  transfer                           dUSD 200  agent -> 0xe7450fdbacc3bf88a361f469ea693fe000526d56
+                   tx 0xf6355fe00cd22a606c8b3734bb2aa6d525d3bdb813ac5490ef9af48ee921f988
+  (sepolia guardian: FROZEN: )
+  (sepolia transfer: )
