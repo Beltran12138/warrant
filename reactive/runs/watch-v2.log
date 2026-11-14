@@ -1,0 +1,13 @@
+watching agent 0xEB54eECCB05ec05B3Cf5Ce61e018F248356CE165  guardian 0x1cFbF4c53b8EFfabEC870423dc255c89eC4B9Ba2  sentinel 0xF668fc11CFf90fEE81A7A12b68F2014CaC030781
+  (sepolia transfer: )
+09:52:24Z  sepolia  guardian: drawn                    dUSD 200  remaining 800
+                   tx 0x88f2d8a64eaa3567ae5cda2901bba7250b6e5fd59bf36068aefa7782c5be270f
+09:52:24Z  sepolia  transfer                           dUSD 200  0x1cfbf4c53b8effabec870423dc255c89ec4b9ba2 -> agent
+                   tx 0x88f2d8a64eaa3567ae5cda2901bba7250b6e5fd59bf36068aefa7782c5be270f
+09:52:36Z  sepolia  transfer                           dUSD 200  agent -> 0xe7450fdbacc3bf88a361f469ea693fe000526d56
+                   tx 0x1eff645dee69bcacc7433092a7b9943d8d37b0d86fd03d7903c9033e91b82198
+09:52:37Z  lasna    sentinel: VIOLATION -> callback    Undisclosed  dUSD 200  origin tx 0x1eff645dee69bcacc7433092a7b9943d8d37b0d86fd03d7903c9033e91b82198
+                   tx 0xe291dce57f14de5b5ff8d62d39b7922a13651a6c77fce44bba189ebdd510969e
+09:53:00Z  sepolia  guardian: FROZEN                   Undisclosed  budget cut 800  warrant revoked True  origin tx 0x1eff645dee69bcacc7433092a7b9943d8d37b0d86fd03d7903c9033e91b82198
+                   tx 0xd105f53e25451dd86a857f1e0ffcf8a84de95d1d3a4764d42c0bd4117d637db9
+  (lasna: Error: MPP HTTP request to https://lasna-rpc.rnk.dev/ failed: HTTP request failed: error sending request: error sending request: client error (Connect): tls handshake eof)

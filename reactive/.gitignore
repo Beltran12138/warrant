@@ -1,0 +1,8 @@
+out/
+cache/
+broadcast/*/31337/
+.env
+.env.*
+!.env.example
+node_modules/
+__pycache__/
