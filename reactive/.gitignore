@@ -6,3 +6,5 @@ broadcast/*/31337/
 !.env.example
 node_modules/
 __pycache__/
+video/out/*
+!video/out/recording.json

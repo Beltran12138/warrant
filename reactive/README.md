@@ -103,6 +103,10 @@ a new warrant (v3) and budget follow.
 trade at 09:37:48 ([`0xfc5b5200…`](https://sepolia.etherscan.io/tx/0xfc5b520038831908bc628a3556782556a1afd1184dbcc81104d1f1523a030690)),
 sentinel `TradeCovered` at 09:37:49 ([`0x40572544…`](https://lasna.reactscan.net/tx/0x40572544caa0b04bc573329f257e8741b0362631cb86eab3b6e4640eb91cc985)).
 
+**Third run, recorded for the video** (10:21–10:30 UTC, [`video/out/recording.json`](video/out/recording.json),
+rendered by [`video/render.py`](video/render.py), no screen capture): covered 1 s after the trade; frozen 12 s after
+an undisclosed trade; frozen 12 s after a leaked key traded past a FAIL; the next `draw` reverted `AgentFrozen`.
+
 **What it cost.** Each freeze callback used ~209k gas on Sepolia (proxy included). Over runs 1–3 the
 sentinel's balance went from 1.2 to 1.117 lREACT. Sepolia gas was close to zero
 during the run, so the guardian's callback bill was negligible; it would not be on mainnet.
